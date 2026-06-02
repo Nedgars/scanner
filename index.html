@@ -4,395 +4,228 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="theme-color" content="#000000">
 <title>FreightScan</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<script async src="https://docs.opencv.org/4.8.0/opencv.js" onload="onOpenCvReady()" onerror="onOpenCvError()"></script>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
 
 body {
-  background: #000;
-  color: #fff;
-  font-family: 'Inter', -apple-system, sans-serif;
-  height: 100dvh;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
+  background:#000;
+  color:#fff;
+  font-family:'Inter',-apple-system,sans-serif;
+  height:100dvh;
+  overflow:hidden;
+  display:flex;
+  flex-direction:column;
 }
 
-/* ── CAMERA VIEW ── */
-#camera-view {
-  position: relative;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
+/* CAMERA */
+#camera-view { position:relative; flex:1; display:flex; flex-direction:column; }
+#video { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+
+#top-bar {
+  position:absolute; top:0; left:0; right:0;
+  padding:16px 20px;
+  padding-top:max(16px,env(safe-area-inset-top));
+  background:linear-gradient(to bottom,rgba(0,0,0,0.65),transparent);
+  display:flex; align-items:center; justify-content:space-between;
+  z-index:10;
 }
 
-#video {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
+.app-name { font-size:17px; font-weight:700; letter-spacing:-0.3px; }
+.app-name span { color:#f97316; }
 
-/* Document frame overlay */
+#cv-status {
+  font-size:11px;
+  padding:3px 10px;
+  border-radius:20px;
+  background:rgba(255,255,255,0.1);
+  color:rgba(255,255,255,0.5);
+}
+#cv-status.ready { background:rgba(34,197,94,0.2); color:#22c55e; }
+
+/* Document frame */
 #frame-overlay {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  pointer-events: none;
+  position:absolute; inset:0;
+  display:flex; align-items:center; justify-content:center;
+  pointer-events:none;
 }
-
 .doc-frame {
-  width: 85%;
-  aspect-ratio: 1.414; /* A4 ratio */
-  position: relative;
+  width:82%; aspect-ratio:1.414; position:relative;
 }
-
 .doc-frame::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border: 2px solid rgba(255,255,255,0.4);
-  border-radius: 4px;
+  content:''; position:absolute; inset:0;
+  border:2px solid rgba(255,255,255,0.3); border-radius:4px;
 }
-
-/* Corner brackets */
-.corner {
-  position: absolute;
-  width: 24px;
-  height: 24px;
-  border-color: #fff;
-  border-style: solid;
-}
+.corner { position:absolute; width:22px; height:22px; border-color:#fff; border-style:solid; }
 .corner.tl { top:-2px; left:-2px; border-width:3px 0 0 3px; border-radius:3px 0 0 0; }
 .corner.tr { top:-2px; right:-2px; border-width:3px 3px 0 0; border-radius:0 3px 0 0; }
 .corner.bl { bottom:-2px; left:-2px; border-width:0 0 3px 3px; border-radius:0 0 0 3px; }
 .corner.br { bottom:-2px; right:-2px; border-width:0 3px 3px 0; border-radius:0 0 3px 0; }
-
 .frame-hint {
-  position: absolute;
-  bottom: -28px;
-  left: 0; right: 0;
-  text-align: center;
-  font-size: 12px;
-  color: rgba(255,255,255,0.6);
-  letter-spacing: 0.5px;
+  position:absolute; bottom:-26px; left:0; right:0;
+  text-align:center; font-size:12px; color:rgba(255,255,255,0.55);
 }
 
-/* Top bar */
-#top-bar {
-  position: absolute;
-  top: 0; left: 0; right: 0;
-  padding: 16px 20px;
-  padding-top: max(16px, env(safe-area-inset-top));
-  background: linear-gradient(to bottom, rgba(0,0,0,0.6), transparent);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  z-index: 10;
+#bottom-bar {
+  position:absolute; bottom:0; left:0; right:0;
+  padding:24px 40px;
+  padding-bottom:max(24px,env(safe-area-inset-bottom));
+  background:linear-gradient(to top,rgba(0,0,0,0.7),transparent);
+  display:flex; align-items:center; justify-content:space-between;
+  z-index:10;
 }
 
-.app-name {
-  font-size: 17px;
-  font-weight: 700;
-  letter-spacing: -0.3px;
+#shutter {
+  width:72px; height:72px; border-radius:50%;
+  background:#fff; border:4px solid rgba(255,255,255,0.3);
+  cursor:pointer; transition:transform 0.1s; flex-shrink:0;
+  position:relative;
 }
+#shutter::after {
+  content:''; position:absolute; inset:4px;
+  border-radius:50%; background:#fff; transition:background 0.1s;
+}
+#shutter:active { transform:scale(0.92); }
+#shutter:active::after { background:#ccc; }
+#shutter:disabled { opacity:0.4; }
 
-.app-name span { color: #f97316; }
+.side-btn {
+  width:48px; height:48px; border-radius:12px;
+  background:rgba(255,255,255,0.15);
+  backdrop-filter:blur(8px);
+  border:none; color:#fff; font-size:22px;
+  cursor:pointer; display:flex; align-items:center; justify-content:center;
+  transition:background 0.2s;
+}
+.side-btn:active { background:rgba(255,255,255,0.3); }
 
 #doc-count-badge {
-  background: #f97316;
-  color: #fff;
-  font-size: 12px;
-  font-weight: 700;
-  padding: 4px 10px;
-  border-radius: 20px;
-  display: none;
+  position:absolute; top:-6px; right:-6px;
+  background:#f97316; color:#fff;
+  font-size:11px; font-weight:700;
+  width:20px; height:20px; border-radius:50%;
+  display:none; align-items:center; justify-content:center;
 }
 
-/* Bottom bar */
-#bottom-bar {
-  position: absolute;
-  bottom: 0; left: 0; right: 0;
-  padding: 24px 40px;
-  padding-bottom: max(24px, env(safe-area-inset-bottom));
-  background: linear-gradient(to top, rgba(0,0,0,0.7), transparent);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  z-index: 10;
-}
-
-/* Shutter button */
-#shutter {
-  width: 72px;
-  height: 72px;
-  border-radius: 50%;
-  background: #fff;
-  border: 4px solid rgba(255,255,255,0.3);
-  cursor: pointer;
-  transition: transform 0.1s;
-  flex-shrink: 0;
-  position: relative;
-}
-
-#shutter::after {
-  content: '';
-  position: absolute;
-  inset: 4px;
-  border-radius: 50%;
-  background: #fff;
-  transition: background 0.1s;
-}
-
-#shutter:active { transform: scale(0.92); }
-#shutter:active::after { background: #ddd; }
-
-/* Gallery / export buttons */
-.side-btn {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
-  background: rgba(255,255,255,0.15);
-  backdrop-filter: blur(8px);
-  border: none;
-  color: #fff;
-  font-size: 22px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background 0.2s;
-}
-
-.side-btn:active { background: rgba(255,255,255,0.3); }
-
-/* ── PROCESSING OVERLAY ── */
+/* PROCESSING */
 #processing {
-  position: fixed;
-  inset: 0;
-  background: #000;
-  display: none;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 20px;
-  z-index: 100;
+  position:fixed; inset:0; background:#000;
+  display:none; flex-direction:column;
+  align-items:center; justify-content:center;
+  gap:16px; z-index:100;
 }
-
-#processing.show { display: flex; }
+#processing.show { display:flex; }
 
 .proc-canvas-wrap {
-  width: 85vw;
-  max-width: 360px;
-  border-radius: 8px;
-  overflow: hidden;
-  position: relative;
+  width:88vw; max-width:380px;
+  border-radius:10px; overflow:hidden;
+  box-shadow:0 0 40px rgba(249,115,22,0.2);
 }
+#proc-canvas { width:100%; display:block; }
 
-#proc-canvas {
-  width: 100%;
-  display: block;
-  border-radius: 8px;
-}
-
-.proc-label {
-  font-size: 13px;
-  color: rgba(255,255,255,0.5);
-  font-weight: 500;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-}
-
-.proc-steps {
-  display: flex;
-  gap: 8px;
-}
-
+.steps-row { display:flex; gap:8px; }
 .step {
-  font-size: 12px;
-  color: rgba(255,255,255,0.3);
-  padding: 4px 10px;
-  border-radius: 20px;
-  border: 1px solid rgba(255,255,255,0.1);
-  transition: all 0.3s;
+  font-size:11px; color:rgba(255,255,255,0.3);
+  padding:4px 10px; border-radius:20px;
+  border:1px solid rgba(255,255,255,0.1);
+  transition:all 0.3s;
 }
+.step.active { color:#f97316; border-color:#f97316; background:rgba(249,115,22,0.1); }
+.step.done { color:#22c55e; border-color:#22c55e; background:rgba(34,197,94,0.08); }
 
-.step.active {
-  color: #f97316;
-  border-color: #f97316;
-  background: rgba(249,115,22,0.1);
-}
+#proc-label { font-size:13px; color:rgba(255,255,255,0.45); letter-spacing:0.5px; }
 
-.step.done {
-  color: #22c55e;
-  border-color: #22c55e;
-  background: rgba(34,197,94,0.1);
-}
-
-.proc-actions {
-  display: flex;
-  gap: 12px;
-  width: 85vw;
-  max-width: 360px;
-}
-
+.proc-actions { display:flex; gap:10px; width:88vw; max-width:380px; }
 .proc-btn {
-  flex: 1;
-  padding: 14px;
-  border-radius: 12px;
-  border: none;
-  font-family: inherit;
-  font-size: 15px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: opacity 0.2s;
+  flex:1; padding:14px; border-radius:12px; border:none;
+  font-family:inherit; font-size:15px; font-weight:600;
+  cursor:pointer; transition:opacity 0.2s;
 }
+.proc-btn:active { opacity:0.8; }
+.proc-btn.primary { background:#f97316; color:#fff; }
+.proc-btn.secondary { background:rgba(255,255,255,0.1); color:#fff; }
 
-.proc-btn:active { opacity: 0.8; }
-.proc-btn.primary { background: #f97316; color: #fff; }
-.proc-btn.secondary { background: rgba(255,255,255,0.1); color: #fff; }
-
-/* ── DOCS LIST ── */
+/* DOCS LIST */
 #docs-view {
-  position: fixed;
-  inset: 0;
-  background: #0a0a0a;
-  display: none;
-  flex-direction: column;
-  z-index: 90;
+  position:fixed; inset:0; background:#0a0a0a;
+  display:none; flex-direction:column; z-index:90;
 }
-
-#docs-view.show { display: flex; }
+#docs-view.show { display:flex; }
 
 .docs-header {
-  padding: 16px 20px;
-  padding-top: max(16px, env(safe-area-inset-top));
-  border-bottom: 1px solid rgba(255,255,255,0.08);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  padding:16px 20px;
+  padding-top:max(16px,env(safe-area-inset-top));
+  border-bottom:1px solid rgba(255,255,255,0.08);
+  display:flex; align-items:center; justify-content:space-between;
 }
-
-.docs-header h2 { font-size: 17px; font-weight: 700; }
-
+.docs-header h2 { font-size:17px; font-weight:700; }
 .close-btn {
-  background: rgba(255,255,255,0.1);
-  border: none;
-  color: #fff;
-  width: 32px; height: 32px;
-  border-radius: 8px;
-  font-size: 16px;
-  cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
+  background:rgba(255,255,255,0.1); border:none; color:#fff;
+  width:32px; height:32px; border-radius:8px;
+  font-size:16px; cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
 }
 
 #docs-list {
-  flex: 1;
-  overflow-y: auto;
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  flex:1; overflow-y:auto; padding:16px;
+  display:flex; flex-direction:column; gap:10px;
 }
 
 .doc-item {
-  background: rgba(255,255,255,0.05);
-  border-radius: 12px;
-  padding: 12px;
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  border: 1px solid rgba(255,255,255,0.08);
+  background:rgba(255,255,255,0.05); border-radius:12px;
+  padding:12px; display:flex; gap:12px; align-items:center;
+  border:1px solid rgba(255,255,255,0.08);
 }
-
 .doc-thumb {
-  width: 56px;
-  height: 56px;
-  border-radius: 8px;
-  object-fit: cover;
-  background: #222;
-  flex-shrink: 0;
-  filter: grayscale(1);
+  width:56px; height:56px; border-radius:8px;
+  object-fit:cover; background:#222; flex-shrink:0;
 }
-
-.doc-info { flex: 1; min-width: 0; }
-.doc-title { font-size: 14px; font-weight: 600; margin-bottom: 2px; }
-.doc-time { font-size: 12px; color: rgba(255,255,255,0.4); }
-
+.doc-info { flex:1; min-width:0; }
+.doc-title { font-size:14px; font-weight:600; margin-bottom:2px; }
+.doc-time { font-size:12px; color:rgba(255,255,255,0.4); }
 .doc-del {
-  background: none;
-  border: none;
-  color: rgba(255,255,255,0.3);
-  font-size: 18px;
-  cursor: pointer;
-  padding: 4px;
+  background:none; border:none; color:rgba(255,255,255,0.3);
+  font-size:18px; cursor:pointer; padding:4px;
 }
 
 .docs-footer {
-  padding: 16px 20px;
-  padding-bottom: max(16px, env(safe-area-inset-bottom));
-  border-top: 1px solid rgba(255,255,255,0.08);
+  padding:16px 20px;
+  padding-bottom:max(16px,env(safe-area-inset-bottom));
+  border-top:1px solid rgba(255,255,255,0.08);
 }
-
 .export-btn {
-  width: 100%;
-  padding: 16px;
-  background: #f97316;
-  color: #fff;
-  border: none;
-  border-radius: 14px;
-  font-family: inherit;
-  font-size: 16px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: opacity 0.2s;
+  width:100%; padding:16px; background:#f97316; color:#fff;
+  border:none; border-radius:14px; font-family:inherit;
+  font-size:16px; font-weight:700; cursor:pointer;
 }
+.export-btn:disabled { opacity:0.4; }
 
-.export-btn:active { opacity: 0.85; }
-.export-btn:disabled { opacity: 0.4; }
-
-/* Toast */
+/* TOAST */
 .toast {
-  position: fixed;
-  bottom: 100px;
-  left: 50%;
-  transform: translateX(-50%) translateY(20px);
-  background: rgba(30,30,30,0.95);
-  backdrop-filter: blur(12px);
-  color: #fff;
-  padding: 10px 20px;
-  border-radius: 20px;
-  font-size: 14px;
-  font-weight: 500;
-  opacity: 0;
-  transition: all 0.3s;
-  pointer-events: none;
-  white-space: nowrap;
-  z-index: 999;
+  position:fixed; bottom:110px; left:50%;
+  transform:translateX(-50%) translateY(16px);
+  background:rgba(20,20,20,0.95); backdrop-filter:blur(12px);
+  color:#fff; padding:10px 20px; border-radius:20px;
+  font-size:14px; font-weight:500; opacity:0;
+  transition:all 0.3s; pointer-events:none;
+  white-space:nowrap; z-index:999;
 }
-
-.toast.show {
-  opacity: 1;
-  transform: translateX(-50%) translateY(0);
-}
+.toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
 </style>
 </head>
 <body>
 
-<!-- ══ CAMERA VIEW ══ -->
+<!-- CAMERA -->
 <div id="camera-view">
   <video id="video" autoplay playsinline muted></video>
 
   <div id="top-bar">
     <div class="app-name">Freight<span>Scan</span></div>
-    <div id="doc-count-badge">0 dok.</div>
+    <div id="cv-status">OpenCV ielādē...</div>
   </div>
 
   <div id="frame-overlay">
@@ -406,32 +239,36 @@ body {
   </div>
 
   <div id="bottom-bar">
-    <button class="side-btn" onclick="openDocs()" title="Dokumenti">📁</button>
-    <button id="shutter" onclick="capture()" title="Fotografēt"></button>
-    <button class="side-btn" onclick="document.getElementById('file-input').click()" title="Galerija">🖼</button>
+    <button class="side-btn" style="position:relative" onclick="openDocs()">
+      📁
+      <div id="doc-count-badge">0</div>
+    </button>
+    <button id="shutter" onclick="capture()" disabled></button>
+    <button class="side-btn" onclick="document.getElementById('file-input').click()">🖼</button>
   </div>
 </div>
 
 <input type="file" id="file-input" accept="image/*" style="display:none" onchange="loadFromFile(event)">
+<canvas id="hidden-canvas" style="display:none"></canvas>
 
-<!-- ══ PROCESSING ══ -->
+<!-- PROCESSING -->
 <div id="processing">
   <div class="proc-canvas-wrap">
     <canvas id="proc-canvas"></canvas>
   </div>
-  <div class="proc-steps">
-    <div class="step" id="s1">Apgriež</div>
-    <div class="step" id="s2">Melno-balts</div>
-    <div class="step" id="s3">Asina</div>
+  <div class="steps-row">
+    <div class="step" id="s1">Atrod malas</div>
+    <div class="step" id="s2">Iztaisno</div>
+    <div class="step" id="s3">Skenē</div>
   </div>
-  <div class="proc-label" id="proc-label">Apstrādā...</div>
+  <div id="proc-label">Apstrādā...</div>
   <div class="proc-actions" id="proc-actions" style="display:none">
     <button class="proc-btn secondary" onclick="retake()">↩ Vēlreiz</button>
     <button class="proc-btn primary" onclick="saveAndBack()">✓ Saglabāt</button>
   </div>
 </div>
 
-<!-- ══ DOCS LIST ══ -->
+<!-- DOCS LIST -->
 <div id="docs-view">
   <div class="docs-header">
     <h2>Dokumenti</h2>
@@ -439,7 +276,7 @@ body {
   </div>
   <div id="docs-list"></div>
   <div class="docs-footer">
-    <button class="export-btn" id="export-btn" onclick="exportPDF()">⬇ Eksportēt PDF</button>
+    <button class="export-btn" id="export-btn" onclick="exportPDF()" disabled>⬇ Eksportēt PDF</button>
   </div>
 </div>
 
@@ -447,31 +284,48 @@ body {
 
 <script>
 let stream = null;
+let cvReady = false;
 let documents = [];
 let currentProcessed = null;
 
-// ── START CAMERA ──
+function onOpenCvReady() {
+  cvReady = true;
+  const s = document.getElementById('cv-status');
+  s.textContent = 'Gatavs';
+  s.classList.add('ready');
+  document.getElementById('shutter').disabled = false;
+}
+
+function onOpenCvError() {
+  const s = document.getElementById('cv-status');
+  s.textContent = 'Bez OpenCV';
+  document.getElementById('shutter').disabled = false;
+}
+
+// START CAMERA
 async function startCamera() {
   try {
     stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }
+      video: { facingMode:{ideal:'environment'}, width:{ideal:1920}, height:{ideal:1080} }
     });
     document.getElementById('video').srcObject = stream;
   } catch(e) {
-    toast('Kamera nav pieejama — izmanto galeriju 🖼');
+    toast('Kamera nav pieejama — izmanto 🖼 galeriju');
+    document.getElementById('shutter').disabled = false;
   }
 }
 
-// ── CAPTURE ──
+// CAPTURE from video
 function capture() {
   const video = document.getElementById('video');
-  const canvas = document.getElementById('proc-canvas');
+  const canvas = document.getElementById('hidden-canvas');
   canvas.width = video.videoWidth || 1280;
   canvas.height = video.videoHeight || 720;
   canvas.getContext('2d').drawImage(video, 0, 0);
   processImage(canvas);
 }
 
+// LOAD from file
 function loadFromFile(e) {
   const file = e.target.files[0];
   if (!file) return;
@@ -479,7 +333,7 @@ function loadFromFile(e) {
   reader.onload = ev => {
     const img = new Image();
     img.onload = () => {
-      const canvas = document.getElementById('proc-canvas');
+      const canvas = document.getElementById('hidden-canvas');
       canvas.width = img.width;
       canvas.height = img.height;
       canvas.getContext('2d').drawImage(img, 0, 0);
@@ -491,194 +345,316 @@ function loadFromFile(e) {
   e.target.value = '';
 }
 
-// ── PROCESS IMAGE ──
-async function processImage(canvas) {
+// ── MAIN PROCESSING ──
+async function processImage(srcCanvas) {
   document.getElementById('processing').classList.add('show');
   document.getElementById('proc-actions').style.display = 'none';
-  ['s1','s2','s3'].forEach(s => {
-    document.getElementById(s).className = 'step';
-  });
+  ['s1','s2','s3'].forEach(id => document.getElementById(id).className = 'step');
 
-  const ctx = canvas.getContext('2d');
-  const w = canvas.width, h = canvas.height;
+  const outCanvas = document.getElementById('proc-canvas');
 
-  // STEP 1: Auto-crop (perspective correction approximation)
-  await setStep('s1', 'Apgriež...');
-  await sleep(300);
-  const cropped = autoCrop(ctx, w, h);
-  canvas.width = cropped.width;
-  canvas.height = cropped.height;
-  ctx.putImageData(cropped, 0, 0);
-  doneStep('s1');
+  if (cvReady && typeof cv !== 'undefined') {
+    await processWithOpenCV(srcCanvas, outCanvas);
+  } else {
+    await processBasic(srcCanvas, outCanvas);
+  }
 
-  // STEP 2: Grayscale + contrast
-  await setStep('s2', 'Melno-balts...');
-  await sleep(300);
-  grayscaleContrast(ctx, canvas.width, canvas.height);
-  doneStep('s2');
-
-  // STEP 3: Sharpen
-  await setStep('s3', 'Asina...');
-  await sleep(300);
-  sharpen(ctx, canvas.width, canvas.height);
-  doneStep('s3');
-
+  currentProcessed = outCanvas.toDataURL('image/jpeg', 0.93);
   document.getElementById('proc-label').textContent = 'Gatavs!';
-  currentProcessed = canvas.toDataURL('image/jpeg', 0.92);
   document.getElementById('proc-actions').style.display = 'flex';
 }
 
-function autoCrop(ctx, w, h) {
-  // Smart trim: find content boundaries by checking edges
-  const data = ctx.getImageData(0, 0, w, h);
-  const px = data.data;
+// ── OPENCV PROCESSING ──
+async function processWithOpenCV(srcCanvas, outCanvas) {
+  setStep('s1', 'Atrod dokumenta malas...');
+  await sleep(100);
 
-  const threshold = 240;
-  let top = 0, bottom = h, left = 0, right = w;
+  let src = cv.imread(srcCanvas);
+  let gray = new cv.Mat();
+  let blurred = new cv.Mat();
+  let edges = new cv.Mat();
 
-  // Find top
-  outer: for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      const i = (y * w + x) * 4;
-      if (px[i] < threshold || px[i+1] < threshold || px[i+2] < threshold) {
-        top = Math.max(0, y - 10);
-        break outer;
-      }
-    }
-  }
-  // Find bottom
-  outer2: for (let y = h-1; y >= 0; y--) {
-    for (let x = 0; x < w; x++) {
-      const i = (y * w + x) * 4;
-      if (px[i] < threshold || px[i+1] < threshold || px[i+2] < threshold) {
-        bottom = Math.min(h, y + 10);
-        break outer2;
-      }
-    }
-  }
-  // Find left
-  outer3: for (let x = 0; x < w; x++) {
-    for (let y = 0; y < h; y++) {
-      const i = (y * w + x) * 4;
-      if (px[i] < threshold || px[i+1] < threshold || px[i+2] < threshold) {
-        left = Math.max(0, x - 10);
-        break outer3;
-      }
-    }
-  }
-  // Find right
-  outer4: for (let x = w-1; x >= 0; x--) {
-    for (let y = 0; y < h; y++) {
-      const i = (y * w + x) * 4;
-      if (px[i] < threshold || px[i+1] < threshold || px[i+2] < threshold) {
-        right = Math.min(w, x + 10);
-        break outer4;
-      }
-    }
+  // Grayscale
+  cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+  cv.GaussianBlur(gray, blurred, new cv.Size(5,5), 0);
+  cv.Canny(blurred, edges, 75, 200);
+
+  // Dilate to connect edges
+  let dilated = new cv.Mat();
+  let kernel = cv.Mat.ones(3, 3, cv.CV_8U);
+  cv.dilate(edges, dilated, kernel);
+
+  // Find contours
+  let contours = new cv.MatVector();
+  let hierarchy = new cv.Mat();
+  cv.findContours(dilated, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+
+  // Find largest quadrilateral
+  let docContour = findDocContour(contours, src.cols * src.rows);
+
+  doneStep('s1');
+  setStep('s2', 'Iztaisno perspektīvu...');
+  await sleep(100);
+
+  let warped;
+  if (docContour) {
+    warped = perspectiveTransform(src, docContour);
+  } else {
+    // fallback: just use full image
+    warped = src.clone();
   }
 
-  const cw = right - left;
-  const ch = bottom - top;
-  if (cw < 100 || ch < 100) return ctx.getImageData(0, 0, w, h);
-  return ctx.getImageData(left, top, cw, ch);
+  doneStep('s2');
+  setStep('s3', 'Skenē...');
+  await sleep(100);
+
+  // Convert to grayscale scan look
+  let warpedGray = new cv.Mat();
+  cv.cvtColor(warped, warpedGray, cv.COLOR_RGBA2GRAY);
+
+  // Adaptive threshold for scan effect
+  let thresholded = new cv.Mat();
+  cv.adaptiveThreshold(warpedGray, thresholded, 255,
+    cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 21, 10);
+
+  // Show result
+  outCanvas.width = thresholded.cols;
+  outCanvas.height = thresholded.rows;
+  cv.imshow(outCanvas, thresholded);
+
+  // Cleanup
+  [src, gray, blurred, edges, dilated, kernel, contours, hierarchy, warpedGray, thresholded].forEach(m => {
+    try { m.delete(); } catch(e){}
+  });
+  try { warped.delete(); } catch(e){}
+
+  doneStep('s3');
 }
 
-function grayscaleContrast(ctx, w, h) {
-  const imageData = ctx.getImageData(0, 0, w, h);
-  const d = imageData.data;
-  const contrast = 50;
-  const factor = (259 * (contrast + 255)) / (255 * (259 - contrast));
+function findDocContour(contours, totalArea) {
+  let bestContour = null;
+  let bestArea = 0;
 
-  for (let i = 0; i < d.length; i += 4) {
-    // Grayscale (weighted)
-    const gray = 0.299 * d[i] + 0.587 * d[i+1] + 0.114 * d[i+2];
-    // Contrast
-    const c = clamp(factor * (gray - 128) + 128 + 10);
-    d[i] = d[i+1] = d[i+2] = c;
+  for (let i = 0; i < contours.size(); i++) {
+    const cnt = contours.get(i);
+    const area = cv.contourArea(cnt);
+    if (area < totalArea * 0.1) continue; // too small
+
+    // Approximate polygon
+    let peri = cv.arcLength(cnt, true);
+    let approx = new cv.Mat();
+    cv.approxPolyDP(cnt, approx, 0.02 * peri, true);
+
+    if (approx.rows === 4 && area > bestArea) {
+      bestArea = area;
+      bestContour = approx;
+    } else {
+      approx.delete();
+    }
   }
-  ctx.putImageData(imageData, 0, 0);
+  return bestContour;
+}
+
+function perspectiveTransform(src, contour) {
+  // Get 4 corner points
+  let pts = [];
+  for (let i = 0; i < 4; i++) {
+    pts.push({ x: contour.data32S[i*2], y: contour.data32S[i*2+1] });
+  }
+  contour.delete();
+
+  // Order: top-left, top-right, bottom-right, bottom-left
+  pts.sort((a,b) => (a.x+a.y) - (b.x+b.y));
+  let tl = pts[0], br = pts[3];
+  let remaining = [pts[1], pts[2]];
+  remaining.sort((a,b) => a.x - b.x);
+  let bl = remaining[0], tr = remaining[1];
+
+  // Output dimensions (A4-ish)
+  const w = Math.max(dist(tl,tr), dist(bl,br));
+  const h = Math.max(dist(tl,bl), dist(tr,br));
+
+  let srcPts = cv.matFromArray(4, 1, cv.CV_32FC2, [
+    tl.x, tl.y, tr.x, tr.y, br.x, br.y, bl.x, bl.y
+  ]);
+  let dstPts = cv.matFromArray(4, 1, cv.CV_32FC2, [
+    0, 0, w, 0, w, h, 0, h
+  ]);
+
+  let M = cv.getPerspectiveTransform(srcPts, dstPts);
+  let warped = new cv.Mat();
+  let dsize = new cv.Size(w, h);
+  cv.warpPerspective(src, warped, M, dsize, cv.INTER_LINEAR, cv.BORDER_CONSTANT, new cv.Scalar());
+
+  srcPts.delete(); dstPts.delete(); M.delete();
+  return warped;
+}
+
+function dist(a, b) {
+  return Math.sqrt((a.x-b.x)**2 + (a.y-b.y)**2);
+}
+
+// ── BASIC PROCESSING (fallback without OpenCV) ──
+async function processBasic(srcCanvas, outCanvas) {
+  setStep('s1', 'Apgriež...');
+  await sleep(200);
+
+  const ctx = srcCanvas.getContext('2d');
+  const w = srcCanvas.width, h = srcCanvas.height;
+
+  // Smart crop
+  const imageData = ctx.getImageData(0, 0, w, h);
+  const cropped = smartCrop(imageData, w, h);
+
+  outCanvas.width = cropped.width;
+  outCanvas.height = cropped.height;
+  const outCtx = outCanvas.getContext('2d');
+  outCtx.putImageData(cropped, 0, 0);
+  doneStep('s1');
+
+  setStep('s2', 'Melno-balts...');
+  await sleep(200);
+  grayscaleAdaptive(outCtx, outCanvas.width, outCanvas.height);
+  doneStep('s2');
+
+  setStep('s3', 'Asina...');
+  await sleep(200);
+  sharpen(outCtx, outCanvas.width, outCanvas.height);
+  doneStep('s3');
+}
+
+function smartCrop(imageData, w, h) {
+  const d = imageData.data;
+  const thresh = 245;
+  let top=0, bottom=h-1, left=0, right=w-1;
+
+  outer1: for (let y=0;y<h;y++) for (let x=0;x<w;x++) {
+    const i=(y*w+x)*4;
+    if (d[i]<thresh||d[i+1]<thresh||d[i+2]<thresh){top=Math.max(0,y-8);break outer1;}
+  }
+  outer2: for (let y=h-1;y>=0;y--) for (let x=0;x<w;x++) {
+    const i=(y*w+x)*4;
+    if (d[i]<thresh||d[i+1]<thresh||d[i+2]<thresh){bottom=Math.min(h-1,y+8);break outer2;}
+  }
+  outer3: for (let x=0;x<w;x++) for (let y=0;y<h;y++) {
+    const i=(y*w+x)*4;
+    if (d[i]<thresh||d[i+1]<thresh||d[i+2]<thresh){left=Math.max(0,x-8);break outer3;}
+  }
+  outer4: for (let x=w-1;x>=0;x--) for (let y=0;y<h;y++) {
+    const i=(y*w+x)*4;
+    if (d[i]<thresh||d[i+1]<thresh||d[i+2]<thresh){right=Math.min(w-1,x+8);break outer4;}
+  }
+
+  const cw=right-left, ch=bottom-top;
+  if (cw<80||ch<80) return imageData;
+
+  // Create temp canvas to get cropped data
+  const tmp = document.createElement('canvas');
+  tmp.width=w; tmp.height=h;
+  tmp.getContext('2d').putImageData(imageData,0,0);
+  const out = document.createElement('canvas');
+  out.width=cw; out.height=ch;
+  out.getContext('2d').drawImage(tmp,left,top,cw,ch,0,0,cw,ch);
+  return out.getContext('2d').getImageData(0,0,cw,ch);
+}
+
+function grayscaleAdaptive(ctx, w, h) {
+  const imageData = ctx.getImageData(0,0,w,h);
+  const d = imageData.data;
+
+  // Convert to grayscale
+  for (let i=0;i<d.length;i+=4) {
+    const g = 0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];
+    d[i]=d[i+1]=d[i+2]=g;
+  }
+
+  // Local adaptive threshold (simplified)
+  const blockSize = Math.floor(Math.min(w,h)/20)*2+1;
+  const C = 8;
+  for (let y=0;y<h;y++) {
+    for (let x=0;x<w;x++) {
+      const i=(y*w+x)*4;
+      let sum=0, count=0;
+      const half=Math.floor(blockSize/2);
+      for (let by=Math.max(0,y-half);by<=Math.min(h-1,y+half);by+=2) {
+        for (let bx=Math.max(0,x-half);bx<=Math.min(w-1,x+half);bx+=2) {
+          sum+=d[(by*w+bx)*4]; count++;
+        }
+      }
+      const mean=sum/count;
+      d[i]=d[i+1]=d[i+2]= d[i] < mean-C ? 0 : 255;
+    }
+  }
+  ctx.putImageData(imageData,0,0);
 }
 
 function sharpen(ctx, w, h) {
-  const src = ctx.getImageData(0, 0, w, h);
-  const dst = ctx.createImageData(w, h);
-  const s = src.data, d = dst.data;
-  // Sharpening kernel
-  const kernel = [0,-1,0,-1,5,-1,0,-1,0];
-
-  for (let y = 1; y < h-1; y++) {
-    for (let x = 1; x < w-1; x++) {
-      let r = 0;
-      for (let ky = -1; ky <= 1; ky++) {
-        for (let kx = -1; kx <= 1; kx++) {
-          const idx = ((y+ky)*w + (x+kx)) * 4;
-          r += s[idx] * kernel[(ky+1)*3 + (kx+1)];
-        }
+  const src = ctx.getImageData(0,0,w,h);
+  const dst = ctx.createImageData(w,h);
+  const s=src.data, d=dst.data;
+  const k=[0,-1,0,-1,5,-1,0,-1,0];
+  for (let y=1;y<h-1;y++) {
+    for (let x=1;x<w-1;x++) {
+      let r=0;
+      for (let ky=-1;ky<=1;ky++) for (let kx=-1;kx<=1;kx++) {
+        r+=s[((y+ky)*w+(x+kx))*4]*k[(ky+1)*3+(kx+1)];
       }
-      const i = (y*w+x)*4;
-      d[i] = d[i+1] = d[i+2] = clamp(r);
-      d[i+3] = 255;
+      const i=(y*w+x)*4;
+      d[i]=d[i+1]=d[i+2]=clamp(r); d[i+3]=255;
     }
   }
-  ctx.putImageData(dst, 0, 0);
+  ctx.putImageData(dst,0,0);
 }
 
-function clamp(v) { return Math.max(0, Math.min(255, Math.round(v))); }
-function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+function clamp(v){return Math.max(0,Math.min(255,Math.round(v)));}
+function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
 
-async function setStep(id, label) {
+function setStep(id,label) {
   document.getElementById(id).classList.add('active');
-  document.getElementById('proc-label').textContent = label;
+  document.getElementById('proc-label').textContent=label;
 }
-
 function doneStep(id) {
-  const el = document.getElementById(id);
-  el.classList.remove('active');
-  el.classList.add('done');
+  const el=document.getElementById(id);
+  el.classList.remove('active'); el.classList.add('done');
 }
 
-// ── SAVE ──
+// SAVE
 function saveAndBack() {
   if (!currentProcessed) return;
   documents.push({
     id: Date.now(),
     image: currentProcessed,
-    time: new Date().toLocaleTimeString('lv-LV', {hour:'2-digit', minute:'2-digit'})
+    time: new Date().toLocaleTimeString('lv-LV',{hour:'2-digit',minute:'2-digit'})
   });
-  currentProcessed = null;
+  currentProcessed=null;
   updateBadge();
   document.getElementById('processing').classList.remove('show');
   toast('✅ Saglabāts!');
 }
 
 function retake() {
-  currentProcessed = null;
+  currentProcessed=null;
   document.getElementById('processing').classList.remove('show');
 }
 
 function updateBadge() {
-  const badge = document.getElementById('doc-count-badge');
-  badge.textContent = `${documents.length} dok.`;
-  badge.style.display = documents.length > 0 ? 'block' : 'none';
+  const b=document.getElementById('doc-count-badge');
+  b.textContent=documents.length;
+  b.style.display=documents.length>0?'flex':'none';
 }
 
-// ── DOCS VIEW ──
-function openDocs() {
-  renderDocs();
-  document.getElementById('docs-view').classList.add('show');
-}
-
-function closeDocs() {
-  document.getElementById('docs-view').classList.remove('show');
-}
+// DOCS VIEW
+function openDocs() { renderDocs(); document.getElementById('docs-view').classList.add('show'); }
+function closeDocs() { document.getElementById('docs-view').classList.remove('show'); }
 
 function renderDocs() {
-  const list = document.getElementById('docs-list');
-  if (documents.length === 0) {
-    list.innerHTML = '<div style="text-align:center;padding:40px;color:rgba(255,255,255,0.3);font-size:14px">Nav dokumentu.<br>Fotografē ar pogu apakšā.</div>';
+  const list=document.getElementById('docs-list');
+  if (!documents.length) {
+    list.innerHTML='<div style="text-align:center;padding:48px 20px;color:rgba(255,255,255,0.25);font-size:14px">Nav dokumentu.<br><br>Fotografē ar balto pogu.</div>';
+    document.getElementById('export-btn').disabled=true;
     return;
   }
-  list.innerHTML = documents.map((doc, i) => `
+  list.innerHTML=documents.map((doc,i)=>`
     <div class="doc-item">
       <img class="doc-thumb" src="${doc.image}">
       <div class="doc-info">
@@ -688,61 +664,50 @@ function renderDocs() {
       <button class="doc-del" onclick="deleteDoc(${doc.id})">🗑</button>
     </div>
   `).join('');
-  document.getElementById('export-btn').disabled = documents.length === 0;
+  document.getElementById('export-btn').disabled=false;
 }
 
 function deleteDoc(id) {
-  documents = documents.filter(d => d.id !== id);
-  updateBadge();
-  renderDocs();
+  documents=documents.filter(d=>d.id!==id);
+  updateBadge(); renderDocs();
 }
 
-// ── EXPORT PDF ──
+// EXPORT PDF
 async function exportPDF() {
   if (!documents.length) return;
-  const btn = document.getElementById('export-btn');
-  btn.textContent = 'Veido PDF...';
-  btn.disabled = true;
-
+  const btn=document.getElementById('export-btn');
+  btn.textContent='Veido PDF...'; btn.disabled=true;
   try {
-    const { PDFDocument, rgb } = PDFLib;
-    const pdf = await PDFDocument.create();
-
+    const {PDFDocument,rgb}=PDFLib;
+    const pdf=await PDFDocument.create();
     for (const doc of documents) {
-      const page = pdf.addPage([595, 842]);
-      const base64 = doc.image.split(',')[1];
-      const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+      const page=pdf.addPage([595,842]);
+      const b64=doc.image.split(',')[1];
+      const bytes=Uint8Array.from(atob(b64),c=>c.charCodeAt(0));
       let img;
-      try { img = await pdf.embedJpg(bytes); } catch { img = await pdf.embedPng(bytes); }
-      const { width, height } = img.scale(1);
-      const scale = Math.min(555/width, 800/height);
-      page.drawImage(img, { x:20, y:22, width:width*scale, height:height*scale });
-      page.drawText(`FreightScan · ${doc.time}`, { x:20, y:8, size:8, color:rgb(0.6,0.6,0.6) });
+      try{img=await pdf.embedJpg(bytes);}catch{img=await pdf.embedPng(bytes);}
+      const {width,height}=img.scale(1);
+      const scale=Math.min(555/width,800/height);
+      page.drawImage(img,{x:20,y:22,width:width*scale,height:height*scale});
+      page.drawText(`FreightScan · ${doc.time}`,{x:20,y:8,size:8,color:rgb(0.6,0.6,0.6)});
     }
-
-    const bytes = await pdf.save();
-    const blob = new Blob([bytes], {type:'application/pdf'});
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `FreightScan_${new Date().toISOString().slice(0,10)}.pdf`;
+    const bytes=await pdf.save();
+    const blob=new Blob([bytes],{type:'application/pdf'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download=`FreightScan_${new Date().toISOString().slice(0,10)}.pdf`;
     a.click();
     toast('📄 PDF lejuplādēts!');
-  } catch(e) {
-    toast('Kļūda: ' + e.message);
-  }
-
-  btn.textContent = '⬇ Eksportēt PDF';
-  btn.disabled = false;
+  } catch(e) { toast('Kļūda: '+e.message); }
+  btn.textContent='⬇ Eksportēt PDF'; btn.disabled=false;
 }
 
 function toast(msg) {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 2500);
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),2500);
 }
 
-// START
 startCamera();
 </script>
 </body>
