@@ -4,859 +4,746 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="theme-color" content="#0a0f1e">
-<title>FreightScan — Kravu dokumenti</title>
-<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Barlow:wght@300;400;600;700;900&display=swap" rel="stylesheet">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="theme-color" content="#000000">
+<title>FreightScan</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 <style>
-  :root {
-    --bg: #0a0f1e;
-    --surface: #111827;
-    --surface2: #1a2235;
-    --accent: #f97316;
-    --accent2: #fb923c;
-    --text: #f1f5f9;
-    --muted: #64748b;
-    --success: #22c55e;
-    --danger: #ef4444;
-    --border: rgba(249,115,22,0.2);
-  }
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
 
-  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+body {
+  background: #000;
+  color: #fff;
+  font-family: 'Inter', -apple-system, sans-serif;
+  height: 100dvh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
 
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: 'Barlow', sans-serif;
-    min-height: 100vh;
-    overflow-x: hidden;
-  }
+/* ── CAMERA VIEW ── */
+#camera-view {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
 
-  /* GRID BACKGROUND */
-  body::before {
-    content: '';
-    position: fixed;
-    inset: 0;
-    background-image:
-      linear-gradient(rgba(249,115,22,0.04) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(249,115,22,0.04) 1px, transparent 1px);
-    background-size: 40px 40px;
-    pointer-events: none;
-    z-index: 0;
-  }
+#video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
 
-  .app { position: relative; z-index: 1; max-width: 480px; margin: 0 auto; min-height: 100vh; display: flex; flex-direction: column; }
+/* Document frame overlay */
+#frame-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
 
-  /* HEADER */
-  header {
-    padding: 20px 20px 16px;
-    border-bottom: 1px solid var(--border);
-    background: rgba(10,15,30,0.8);
-    backdrop-filter: blur(12px);
-    position: sticky; top: 0; z-index: 100;
-  }
+.doc-frame {
+  width: 85%;
+  aspect-ratio: 1.414; /* A4 ratio */
+  position: relative;
+}
 
-  .header-row { display: flex; align-items: center; justify-content: space-between; }
+.doc-frame::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 2px solid rgba(255,255,255,0.4);
+  border-radius: 4px;
+}
 
-  .logo {
-    font-family: 'Space Mono', monospace;
-    font-size: 18px;
-    font-weight: 700;
-    color: var(--accent);
-    letter-spacing: -0.5px;
-  }
+/* Corner brackets */
+.corner {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  border-color: #fff;
+  border-style: solid;
+}
+.corner.tl { top:-2px; left:-2px; border-width:3px 0 0 3px; border-radius:3px 0 0 0; }
+.corner.tr { top:-2px; right:-2px; border-width:3px 3px 0 0; border-radius:0 3px 0 0; }
+.corner.bl { bottom:-2px; left:-2px; border-width:0 0 3px 3px; border-radius:0 0 0 3px; }
+.corner.br { bottom:-2px; right:-2px; border-width:0 3px 3px 0; border-radius:0 0 3px 0; }
 
-  .logo span { color: var(--text); }
+.frame-hint {
+  position: absolute;
+  bottom: -28px;
+  left: 0; right: 0;
+  text-align: center;
+  font-size: 12px;
+  color: rgba(255,255,255,0.6);
+  letter-spacing: 0.5px;
+}
 
-  .badge {
-    background: var(--accent);
-    color: white;
-    font-size: 10px;
-    font-weight: 700;
-    padding: 3px 8px;
-    border-radius: 2px;
-    font-family: 'Space Mono', monospace;
-    letter-spacing: 1px;
-  }
+/* Top bar */
+#top-bar {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  padding: 16px 20px;
+  padding-top: max(16px, env(safe-area-inset-top));
+  background: linear-gradient(to bottom, rgba(0,0,0,0.6), transparent);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  z-index: 10;
+}
 
-  /* SCAN COUNT */
-  .stats-bar {
-    display: flex;
-    gap: 16px;
-    margin-top: 12px;
-  }
+.app-name {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+}
 
-  .stat {
-    font-family: 'Space Mono', monospace;
-    font-size: 11px;
-    color: var(--muted);
-  }
+.app-name span { color: #f97316; }
 
-  .stat strong { color: var(--accent); font-size: 14px; }
+#doc-count-badge {
+  background: #f97316;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 20px;
+  display: none;
+}
 
-  /* MAIN CONTENT */
-  main { flex: 1; padding: 20px; display: flex; flex-direction: column; gap: 20px; }
+/* Bottom bar */
+#bottom-bar {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  padding: 24px 40px;
+  padding-bottom: max(24px, env(safe-area-inset-bottom));
+  background: linear-gradient(to top, rgba(0,0,0,0.7), transparent);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  z-index: 10;
+}
 
-  /* SCAN BUTTON — hero */
-  .scan-hero {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 32px 20px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 16px;
-    position: relative;
-    overflow: hidden;
-    cursor: pointer;
-    transition: border-color 0.2s, transform 0.1s;
-    -webkit-tap-highlight-color: transparent;
-  }
+/* Shutter button */
+#shutter {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: #fff;
+  border: 4px solid rgba(255,255,255,0.3);
+  cursor: pointer;
+  transition: transform 0.1s;
+  flex-shrink: 0;
+  position: relative;
+}
 
-  .scan-hero:active { transform: scale(0.98); }
-  .scan-hero:hover { border-color: var(--accent); }
+#shutter::after {
+  content: '';
+  position: absolute;
+  inset: 4px;
+  border-radius: 50%;
+  background: #fff;
+  transition: background 0.1s;
+}
 
-  .scan-hero::before {
-    content: '';
-    position: absolute;
-    top: -50%;
-    left: -50%;
-    width: 200%;
-    height: 200%;
-    background: radial-gradient(circle at center, rgba(249,115,22,0.06) 0%, transparent 60%);
-    pointer-events: none;
-  }
+#shutter:active { transform: scale(0.92); }
+#shutter:active::after { background: #ddd; }
 
-  .scan-icon {
-    width: 80px;
-    height: 80px;
-    border: 2px solid var(--accent);
-    border-radius: 8px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    position: relative;
-  }
+/* Gallery / export buttons */
+.side-btn {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: rgba(255,255,255,0.15);
+  backdrop-filter: blur(8px);
+  border: none;
+  color: #fff;
+  font-size: 22px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
 
-  .scan-icon::before, .scan-icon::after {
-    content: '';
-    position: absolute;
-    width: 16px;
-    height: 16px;
-    border-color: var(--accent2);
-    border-style: solid;
-  }
+.side-btn:active { background: rgba(255,255,255,0.3); }
 
-  .scan-icon::before { top: -4px; left: -4px; border-width: 3px 0 0 3px; }
-  .scan-icon::after { bottom: -4px; right: -4px; border-width: 0 3px 3px 0; }
+/* ── PROCESSING OVERLAY ── */
+#processing {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  z-index: 100;
+}
 
-  .scan-icon svg { width: 36px; height: 36px; stroke: var(--accent); fill: none; stroke-width: 1.5; }
+#processing.show { display: flex; }
 
-  .scan-hero h2 { font-size: 22px; font-weight: 700; color: var(--text); }
-  .scan-hero p { font-size: 14px; color: var(--muted); text-align: center; line-height: 1.5; }
+.proc-canvas-wrap {
+  width: 85vw;
+  max-width: 360px;
+  border-radius: 8px;
+  overflow: hidden;
+  position: relative;
+}
 
-  .scan-btn {
-    background: var(--accent);
-    color: white;
-    border: none;
-    padding: 14px 32px;
-    border-radius: 4px;
-    font-family: 'Barlow', sans-serif;
-    font-size: 15px;
-    font-weight: 700;
-    letter-spacing: 0.5px;
-    cursor: pointer;
-    width: 100%;
-    transition: background 0.2s;
-  }
+#proc-canvas {
+  width: 100%;
+  display: block;
+  border-radius: 8px;
+}
 
-  .scan-btn:hover { background: var(--accent2); }
+.proc-label {
+  font-size: 13px;
+  color: rgba(255,255,255,0.5);
+  font-weight: 500;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
 
-  /* DOC TYPES */
-  .section-label {
-    font-family: 'Space Mono', monospace;
-    font-size: 10px;
-    color: var(--muted);
-    letter-spacing: 2px;
-    text-transform: uppercase;
-    margin-bottom: 8px;
-  }
+.proc-steps {
+  display: flex;
+  gap: 8px;
+}
 
-  .doc-types {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
-  }
+.step {
+  font-size: 12px;
+  color: rgba(255,255,255,0.3);
+  padding: 4px 10px;
+  border-radius: 20px;
+  border: 1px solid rgba(255,255,255,0.1);
+  transition: all 0.3s;
+}
 
-  .doc-type {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 12px;
-    cursor: pointer;
-    transition: all 0.2s;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
+.step.active {
+  color: #f97316;
+  border-color: #f97316;
+  background: rgba(249,115,22,0.1);
+}
 
-  .doc-type:hover, .doc-type.active {
-    border-color: var(--accent);
-    background: rgba(249,115,22,0.08);
-  }
+.step.done {
+  color: #22c55e;
+  border-color: #22c55e;
+  background: rgba(34,197,94,0.1);
+}
 
-  .doc-type .icon { font-size: 20px; }
-  .doc-type .info { flex: 1; }
-  .doc-type .name { font-size: 13px; font-weight: 600; color: var(--text); }
-  .doc-type .desc { font-size: 11px; color: var(--muted); }
+.proc-actions {
+  display: flex;
+  gap: 12px;
+  width: 85vw;
+  max-width: 360px;
+}
 
-  /* PREVIEW & CONTROLS */
-  #preview-section { display: none; flex-direction: column; gap: 16px; }
+.proc-btn {
+  flex: 1;
+  padding: 14px;
+  border-radius: 12px;
+  border: none;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
 
-  .preview-wrap {
-    position: relative;
-    background: #000;
-    border-radius: 8px;
-    overflow: hidden;
-    border: 1px solid var(--border);
-  }
+.proc-btn:active { opacity: 0.8; }
+.proc-btn.primary { background: #f97316; color: #fff; }
+.proc-btn.secondary { background: rgba(255,255,255,0.1); color: #fff; }
 
-  #preview-canvas {
-    width: 100%;
-    display: block;
-    border-radius: 8px;
-  }
+/* ── DOCS LIST ── */
+#docs-view {
+  position: fixed;
+  inset: 0;
+  background: #0a0a0a;
+  display: none;
+  flex-direction: column;
+  z-index: 90;
+}
 
-  .preview-overlay {
-    position: absolute;
-    inset: 0;
-    border-radius: 8px;
-    pointer-events: none;
-    box-shadow: inset 0 0 0 2px var(--accent);
-  }
+#docs-view.show { display: flex; }
 
-  /* SCAN LINE ANIMATION */
-  .scan-line {
-    position: absolute;
-    left: 0; right: 0;
-    height: 2px;
-    background: linear-gradient(90deg, transparent, var(--accent), transparent);
-    animation: scanline 2s linear infinite;
-    pointer-events: none;
-  }
+.docs-header {
+  padding: 16px 20px;
+  padding-top: max(16px, env(safe-area-inset-top));
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
 
-  @keyframes scanline {
-    0% { top: 0; opacity: 1; }
-    90% { opacity: 1; }
-    100% { top: 100%; opacity: 0; }
-  }
+.docs-header h2 { font-size: 17px; font-weight: 700; }
 
-  .controls {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
-  }
+.close-btn {
+  background: rgba(255,255,255,0.1);
+  border: none;
+  color: #fff;
+  width: 32px; height: 32px;
+  border-radius: 8px;
+  font-size: 16px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
 
-  .btn {
-    padding: 12px;
-    border-radius: 4px;
-    border: none;
-    font-family: 'Barlow', sans-serif;
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-  }
+#docs-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
 
-  .btn-primary { background: var(--accent); color: white; }
-  .btn-primary:hover { background: var(--accent2); }
-  .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
-  .btn-secondary:hover { border-color: var(--accent); }
-  .btn-success { background: var(--success); color: white; grid-column: 1/-1; }
-  .btn-danger { background: transparent; color: var(--danger); border: 1px solid var(--danger); grid-column: 1/-1; font-size: 13px; padding: 8px; }
+.doc-item {
+  background: rgba(255,255,255,0.05);
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  border: 1px solid rgba(255,255,255,0.08);
+}
 
-  /* DOC INFO FORM */
-  .doc-form {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-  }
+.doc-thumb {
+  width: 56px;
+  height: 56px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: #222;
+  flex-shrink: 0;
+  filter: grayscale(1);
+}
 
-  .field { display: flex; flex-direction: column; gap: 4px; }
-  .field label { font-size: 11px; color: var(--muted); font-family: 'Space Mono', monospace; letter-spacing: 1px; }
+.doc-info { flex: 1; min-width: 0; }
+.doc-title { font-size: 14px; font-weight: 600; margin-bottom: 2px; }
+.doc-time { font-size: 12px; color: rgba(255,255,255,0.4); }
 
-  .field input, .field select {
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    color: var(--text);
-    padding: 10px 12px;
-    border-radius: 4px;
-    font-family: 'Barlow', sans-serif;
-    font-size: 14px;
-    outline: none;
-    transition: border-color 0.2s;
-  }
+.doc-del {
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.3);
+  font-size: 18px;
+  cursor: pointer;
+  padding: 4px;
+}
 
-  .field input:focus, .field select:focus { border-color: var(--accent); }
-  .field select option { background: var(--surface); }
+.docs-footer {
+  padding: 16px 20px;
+  padding-bottom: max(16px, env(safe-area-inset-bottom));
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
 
-  /* SCANNED LIST */
-  #scanned-section { display: none; flex-direction: column; gap: 12px; }
+.export-btn {
+  width: 100%;
+  padding: 16px;
+  background: #f97316;
+  color: #fff;
+  border: none;
+  border-radius: 14px;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
 
-  .scanned-list { display: flex; flex-direction: column; gap: 8px; }
+.export-btn:active { opacity: 0.85; }
+.export-btn:disabled { opacity: 0.4; }
 
-  .scanned-item {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 12px 16px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    animation: slideIn 0.3s ease;
-  }
+/* Toast */
+.toast {
+  position: fixed;
+  bottom: 100px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: rgba(30,30,30,0.95);
+  backdrop-filter: blur(12px);
+  color: #fff;
+  padding: 10px 20px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 500;
+  opacity: 0;
+  transition: all 0.3s;
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 999;
+}
 
-  @keyframes slideIn {
-    from { opacity: 0; transform: translateY(-8px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-
-  .scanned-thumb {
-    width: 48px;
-    height: 48px;
-    border-radius: 4px;
-    object-fit: cover;
-    border: 1px solid var(--border);
-    flex-shrink: 0;
-  }
-
-  .scanned-info { flex: 1; min-width: 0; }
-  .scanned-name { font-size: 14px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .scanned-meta { font-size: 11px; color: var(--muted); font-family: 'Space Mono', monospace; margin-top: 2px; }
-
-  .scanned-actions { display: flex; gap: 6px; }
-
-  .icon-btn {
-    width: 32px; height: 32px;
-    border-radius: 4px;
-    border: 1px solid var(--border);
-    background: var(--surface2);
-    color: var(--text);
-    cursor: pointer;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 14px;
-    transition: all 0.2s;
-  }
-
-  .icon-btn:hover { border-color: var(--accent); color: var(--accent); }
-  .icon-btn.del:hover { border-color: var(--danger); color: var(--danger); }
-
-  /* EXPORT BAR */
-  .export-bar {
-    background: var(--surface);
-    border: 1px solid var(--accent);
-    border-radius: 8px;
-    padding: 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .export-bar h3 { font-size: 14px; font-weight: 700; color: var(--accent); }
-  .export-bar p { font-size: 12px; color: var(--muted); }
-
-  /* TOAST */
-  .toast {
-    position: fixed;
-    bottom: 24px;
-    left: 50%;
-    transform: translateX(-50%) translateY(100px);
-    background: var(--success);
-    color: white;
-    padding: 12px 24px;
-    border-radius: 4px;
-    font-weight: 600;
-    font-size: 14px;
-    transition: transform 0.3s cubic-bezier(.34,1.56,.64,1);
-    z-index: 999;
-    white-space: nowrap;
-  }
-
-  .toast.show { transform: translateX(-50%) translateY(0); }
-  .toast.error { background: var(--danger); }
-
-  /* HIDDEN INPUT */
-  #file-input { display: none; }
-
-  /* PROCESSING OVERLAY */
-  .processing {
-    position: fixed;
-    inset: 0;
-    background: rgba(10,15,30,0.9);
-    display: none;
-    align-items: center;
-    justify-content: center;
-    flex-direction: column;
-    gap: 16px;
-    z-index: 200;
-    backdrop-filter: blur(4px);
-  }
-
-  .processing.show { display: flex; }
-
-  .spinner {
-    width: 48px; height: 48px;
-    border: 3px solid var(--border);
-    border-top-color: var(--accent);
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-  }
-
-  @keyframes spin { to { transform: rotate(360deg); } }
-  .processing p { color: var(--muted); font-family: 'Space Mono', monospace; font-size: 12px; letter-spacing: 1px; }
-
-  /* EMPTY STATE */
-  .empty {
-    text-align: center;
-    padding: 32px 20px;
-    color: var(--muted);
-    font-size: 14px;
-    border: 1px dashed var(--border);
-    border-radius: 8px;
-  }
-  .empty .e-icon { font-size: 32px; margin-bottom: 8px; }
+.toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
 </style>
 </head>
 <body>
 
-<div class="app">
-  <header>
-    <div class="header-row">
-      <div class="logo">Freight<span>Scan</span></div>
-      <div class="badge">BETA</div>
+<!-- ══ CAMERA VIEW ══ -->
+<div id="camera-view">
+  <video id="video" autoplay playsinline muted></video>
+
+  <div id="top-bar">
+    <div class="app-name">Freight<span>Scan</span></div>
+    <div id="doc-count-badge">0 dok.</div>
+  </div>
+
+  <div id="frame-overlay">
+    <div class="doc-frame">
+      <div class="corner tl"></div>
+      <div class="corner tr"></div>
+      <div class="corner bl"></div>
+      <div class="corner br"></div>
+      <div class="frame-hint">Novietojiet dokumentu kadrā</div>
     </div>
-    <div class="stats-bar">
-      <div class="stat">Skenēti: <strong id="scan-count">0</strong></div>
-      <div class="stat">PDF gatavi: <strong id="pdf-count">0</strong></div>
-    </div>
-  </header>
+  </div>
 
-  <main>
-    <!-- DOC TYPE SELECTOR -->
-    <div>
-      <div class="section-label">Dokumenta veids</div>
-      <div class="doc-types">
-        <div class="doc-type active" data-type="CMR" onclick="selectType(this)">
-          <div class="icon">🚛</div>
-          <div class="info">
-            <div class="name">CMR</div>
-            <div class="desc">Kravu pavadzīme</div>
-          </div>
-        </div>
-        <div class="doc-type" data-type="Rēķins" onclick="selectType(this)">
-          <div class="icon">🧾</div>
-          <div class="info">
-            <div class="name">Rēķins</div>
-            <div class="desc">Invoice</div>
-          </div>
-        </div>
-        <div class="doc-type" data-type="Muita" onclick="selectType(this)">
-          <div class="icon">📋</div>
-          <div class="info">
-            <div class="name">Muita</div>
-            <div class="desc">Customs doc</div>
-          </div>
-        </div>
-        <div class="doc-type" data-type="Cits" onclick="selectType(this)">
-          <div class="icon">📄</div>
-          <div class="info">
-            <div class="name">Cits</div>
-            <div class="desc">Brīva forma</div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- SCAN HERO -->
-    <div class="scan-hero" id="scan-hero">
-      <div class="scan-icon">
-        <svg viewBox="0 0 24 24"><path d="M3 9V6a1 1 0 011-1h3M15 5h3a1 1 0 011 1v3M21 15v3a1 1 0 01-1 1h-3M9 21H6a1 1 0 01-1-1v-3"/><path d="M7 12h10M12 7v10"/></svg>
-      </div>
-      <h2>Skenēt dokumentu</h2>
-      <p>Uzfotografē CMR, rēķinu vai jebkuru loģistikas dokumentu</p>
-      <button class="scan-btn" onclick="startCamera()">📷 Atvērt kameru</button>
-      <button class="scan-btn" style="background:var(--surface2);border:1px solid var(--border);margin-top:4px" onclick="document.getElementById('file-input').click()">🖼 Izvēlēties no galerijas</button>
-    </div>
-
-    <!-- LIVE CAMERA VIEW -->
-    <div id="camera-section" style="display:none;flex-direction:column;gap:12px">
-      <div class="section-label">Kamera — novietojiet dokumentu kadrā</div>
-      <div class="preview-wrap" style="position:relative">
-        <video id="camera-video" autoplay playsinline muted style="width:100%;display:block;border-radius:8px;background:#000"></video>
-        <div class="preview-overlay"></div>
-        <!-- Corner guides -->
-        <div style="position:absolute;top:12px;left:12px;width:24px;height:24px;border-top:3px solid var(--accent);border-left:3px solid var(--accent);border-radius:2px 0 0 0"></div>
-        <div style="position:absolute;top:12px;right:12px;width:24px;height:24px;border-top:3px solid var(--accent);border-right:3px solid var(--accent);border-radius:0 2px 0 0"></div>
-        <div style="position:absolute;bottom:12px;left:12px;width:24px;height:24px;border-bottom:3px solid var(--accent);border-left:3px solid var(--accent);border-radius:0 0 0 2px"></div>
-        <div style="position:absolute;bottom:12px;right:12px;width:24px;height:24px;border-bottom:3px solid var(--accent);border-right:3px solid var(--accent);border-radius:0 0 2px 0"></div>
-      </div>
-      <div class="controls">
-        <button class="btn btn-secondary" onclick="stopCamera()">✕ Aizvērt</button>
-        <button class="btn btn-primary" onclick="captureFromVideo()">📸 Fotografēt</button>
-      </div>
-    </div>
-
-    <input type="file" id="file-input" accept="image/*" onchange="handleCapture(event)">
-
-    <!-- PREVIEW SECTION -->
-    <div id="preview-section">
-      <div class="section-label">Priekšskatījums</div>
-      <div class="preview-wrap">
-        <canvas id="preview-canvas"></canvas>
-        <div class="preview-overlay"></div>
-        <div class="scan-line"></div>
-      </div>
-
-      <!-- METADATA FORM -->
-      <div class="doc-form">
-        <div class="field">
-          <label>NUMURS / ATSAUCE</label>
-          <input type="text" id="doc-number" placeholder="piem. CMR-2025-0042">
-        </div>
-        <div class="field">
-          <label>ŠOFERIS</label>
-          <input type="text" id="doc-driver" placeholder="Vārds Uzvārds">
-        </div>
-        <div class="field">
-          <label>GALAMĒRĶIS</label>
-          <input type="text" id="doc-dest" placeholder="piem. Rīga → Berlīne">
-        </div>
-      </div>
-
-      <div class="controls">
-        <button class="btn btn-secondary" onclick="retake()">↩ Pārfotografēt</button>
-        <button class="btn btn-primary" onclick="enhanceImage()">✨ Uzlabot</button>
-        <button class="btn btn-success" onclick="saveDocument()">💾 Saglabāt dokumentu</button>
-        <button class="btn btn-danger" onclick="cancelPreview()">Atcelt</button>
-      </div>
-    </div>
-
-    <!-- SCANNED DOCUMENTS LIST -->
-    <div id="scanned-section">
-      <div class="section-label">Skenētie dokumenti</div>
-      <div class="scanned-list" id="scanned-list"></div>
-
-      <div class="export-bar">
-        <h3>📦 Eksportēt PDF paketi</h3>
-        <p>Apvieno visus dokumentus vienā PDF failā nosūtīšanai</p>
-        <button class="btn btn-primary" onclick="exportPDF()" id="export-btn">⬇ Lejuplādēt PDF</button>
-      </div>
-    </div>
-
-  </main>
+  <div id="bottom-bar">
+    <button class="side-btn" onclick="openDocs()" title="Dokumenti">📁</button>
+    <button id="shutter" onclick="capture()" title="Fotografēt"></button>
+    <button class="side-btn" onclick="document.getElementById('file-input').click()" title="Galerija">🖼</button>
+  </div>
 </div>
 
-<!-- PROCESSING OVERLAY -->
-<div class="processing" id="processing">
-  <div class="spinner"></div>
-  <p id="processing-text">APSTRĀDĀ...</p>
+<input type="file" id="file-input" accept="image/*" style="display:none" onchange="loadFromFile(event)">
+
+<!-- ══ PROCESSING ══ -->
+<div id="processing">
+  <div class="proc-canvas-wrap">
+    <canvas id="proc-canvas"></canvas>
+  </div>
+  <div class="proc-steps">
+    <div class="step" id="s1">Apgriež</div>
+    <div class="step" id="s2">Melno-balts</div>
+    <div class="step" id="s3">Asina</div>
+  </div>
+  <div class="proc-label" id="proc-label">Apstrādā...</div>
+  <div class="proc-actions" id="proc-actions" style="display:none">
+    <button class="proc-btn secondary" onclick="retake()">↩ Vēlreiz</button>
+    <button class="proc-btn primary" onclick="saveAndBack()">✓ Saglabāt</button>
+  </div>
 </div>
 
-<!-- TOAST -->
+<!-- ══ DOCS LIST ══ -->
+<div id="docs-view">
+  <div class="docs-header">
+    <h2>Dokumenti</h2>
+    <button class="close-btn" onclick="closeDocs()">✕</button>
+  </div>
+  <div id="docs-list"></div>
+  <div class="docs-footer">
+    <button class="export-btn" id="export-btn" onclick="exportPDF()">⬇ Eksportēt PDF</button>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
-  let selectedType = 'CMR';
-  let currentImageData = null;
-  let documents = [];
-  let enhanced = false;
-  let cameraStream = null;
+let stream = null;
+let documents = [];
+let currentProcessed = null;
 
-  function selectType(el) {
-    document.querySelectorAll('.doc-type').forEach(d => d.classList.remove('active'));
-    el.classList.add('active');
-    selectedType = el.dataset.type;
+// ── START CAMERA ──
+async function startCamera() {
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }
+    });
+    document.getElementById('video').srcObject = stream;
+  } catch(e) {
+    toast('Kamera nav pieejama — izmanto galeriju 🖼');
   }
+}
 
-  function handleCapture(event) {
-    const file = event.target.files[0];
-    if (!file) return;
+// ── CAPTURE ──
+function capture() {
+  const video = document.getElementById('video');
+  const canvas = document.getElementById('proc-canvas');
+  canvas.width = video.videoWidth || 1280;
+  canvas.height = video.videoHeight || 720;
+  canvas.getContext('2d').drawImage(video, 0, 0);
+  processImage(canvas);
+}
 
-    showProcessing('NOLASA ATTĒLU...');
-    enhanced = false;
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const img = new Image();
-      img.onload = () => {
-        drawToCanvas(img);
-        hideProcessing();
-        showPreview();
-      };
-      img.src = e.target.result;
-      currentImageData = e.target.result;
+function loadFromFile(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.getElementById('proc-canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      canvas.getContext('2d').drawImage(img, 0, 0);
+      processImage(canvas);
     };
-    reader.readAsDataURL(file);
-    event.target.value = '';
-  }
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+  e.target.value = '';
+}
 
-  function drawToCanvas(img) {
-    const canvas = document.getElementById('preview-canvas');
-    const maxW = canvas.parentElement.offsetWidth;
-    const ratio = img.height / img.width;
-    canvas.width = maxW;
-    canvas.height = maxW * ratio;
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-  }
+// ── PROCESS IMAGE ──
+async function processImage(canvas) {
+  document.getElementById('processing').classList.add('show');
+  document.getElementById('proc-actions').style.display = 'none';
+  ['s1','s2','s3'].forEach(s => {
+    document.getElementById(s).className = 'step';
+  });
 
-  function enhanceImage() {
-    if (enhanced) { showToast('Jau uzlabots!'); return; }
-    showProcessing('UZLABO KVALITĀTI...');
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width, h = canvas.height;
 
-    setTimeout(() => {
-      const canvas = document.getElementById('preview-canvas');
-      const ctx = canvas.getContext('2d');
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const data = imageData.data;
+  // STEP 1: Auto-crop (perspective correction approximation)
+  await setStep('s1', 'Apgriež...');
+  await sleep(300);
+  const cropped = autoCrop(ctx, w, h);
+  canvas.width = cropped.width;
+  canvas.height = cropped.height;
+  ctx.putImageData(cropped, 0, 0);
+  doneStep('s1');
 
-      // Auto-contrast + sharpen simulation
-      // Step 1: increase contrast
-      const contrast = 40;
-      const factor = (259 * (contrast + 255)) / (255 * (259 - contrast));
+  // STEP 2: Grayscale + contrast
+  await setStep('s2', 'Melno-balts...');
+  await sleep(300);
+  grayscaleContrast(ctx, canvas.width, canvas.height);
+  doneStep('s2');
 
-      for (let i = 0; i < data.length; i += 4) {
-        data[i]   = clamp(factor * (data[i]   - 128) + 128);
-        data[i+1] = clamp(factor * (data[i+1] - 128) + 128);
-        data[i+2] = clamp(factor * (data[i+2] - 128) + 128);
+  // STEP 3: Sharpen
+  await setStep('s3', 'Asina...');
+  await sleep(300);
+  sharpen(ctx, canvas.width, canvas.height);
+  doneStep('s3');
+
+  document.getElementById('proc-label').textContent = 'Gatavs!';
+  currentProcessed = canvas.toDataURL('image/jpeg', 0.92);
+  document.getElementById('proc-actions').style.display = 'flex';
+}
+
+function autoCrop(ctx, w, h) {
+  // Smart trim: find content boundaries by checking edges
+  const data = ctx.getImageData(0, 0, w, h);
+  const px = data.data;
+
+  const threshold = 240;
+  let top = 0, bottom = h, left = 0, right = w;
+
+  // Find top
+  outer: for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4;
+      if (px[i] < threshold || px[i+1] < threshold || px[i+2] < threshold) {
+        top = Math.max(0, y - 10);
+        break outer;
       }
-
-      // Step 2: slight brightness boost
-      for (let i = 0; i < data.length; i += 4) {
-        data[i]   = clamp(data[i]   + 15);
-        data[i+1] = clamp(data[i+1] + 15);
-        data[i+2] = clamp(data[i+2] + 15);
+    }
+  }
+  // Find bottom
+  outer2: for (let y = h-1; y >= 0; y--) {
+    for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4;
+      if (px[i] < threshold || px[i+1] < threshold || px[i+2] < threshold) {
+        bottom = Math.min(h, y + 10);
+        break outer2;
       }
-
-      ctx.putImageData(imageData, 0, 0);
-      currentImageData = canvas.toDataURL('image/jpeg', 0.92);
-      enhanced = true;
-      hideProcessing();
-      showToast('✨ Attēls uzlabots!');
-    }, 600);
+    }
   }
-
-  function clamp(val) { return Math.max(0, Math.min(255, Math.round(val))); }
-
-  function showPreview() {
-    document.getElementById('scan-hero').style.display = 'none';
-    document.getElementById('preview-section').style.display = 'flex';
+  // Find left
+  outer3: for (let x = 0; x < w; x++) {
+    for (let y = 0; y < h; y++) {
+      const i = (y * w + x) * 4;
+      if (px[i] < threshold || px[i+1] < threshold || px[i+2] < threshold) {
+        left = Math.max(0, x - 10);
+        break outer3;
+      }
+    }
   }
-
-  function hidePreview() {
-    document.getElementById('scan-hero').style.display = 'flex';
-    document.getElementById('preview-section').style.display = 'none';
-  }
-
-  async function startCamera() {
-    try {
-      cameraStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }
-      });
-      const video = document.getElementById('camera-video');
-      video.srcObject = cameraStream;
-      document.getElementById('scan-hero').style.display = 'none';
-      document.getElementById('camera-section').style.display = 'flex';
-    } catch (err) {
-      showToast('Kamera nav pieejama — izmanto galeriju', true);
+  // Find right
+  outer4: for (let x = w-1; x >= 0; x--) {
+    for (let y = 0; y < h; y++) {
+      const i = (y * w + x) * 4;
+      if (px[i] < threshold || px[i+1] < threshold || px[i+2] < threshold) {
+        right = Math.min(w, x + 10);
+        break outer4;
+      }
     }
   }
 
-  function stopCamera() {
-    if (cameraStream) { cameraStream.getTracks().forEach(t => t.stop()); cameraStream = null; }
-    document.getElementById('camera-section').style.display = 'none';
-    document.getElementById('scan-hero').style.display = 'flex';
+  const cw = right - left;
+  const ch = bottom - top;
+  if (cw < 100 || ch < 100) return ctx.getImageData(0, 0, w, h);
+  return ctx.getImageData(left, top, cw, ch);
+}
+
+function grayscaleContrast(ctx, w, h) {
+  const imageData = ctx.getImageData(0, 0, w, h);
+  const d = imageData.data;
+  const contrast = 50;
+  const factor = (259 * (contrast + 255)) / (255 * (259 - contrast));
+
+  for (let i = 0; i < d.length; i += 4) {
+    // Grayscale (weighted)
+    const gray = 0.299 * d[i] + 0.587 * d[i+1] + 0.114 * d[i+2];
+    // Contrast
+    const c = clamp(factor * (gray - 128) + 128 + 10);
+    d[i] = d[i+1] = d[i+2] = c;
   }
+  ctx.putImageData(imageData, 0, 0);
+}
 
-  function captureFromVideo() {
-    const video = document.getElementById('camera-video');
-    const canvas = document.getElementById('preview-canvas');
-    canvas.width = video.videoWidth || 1280;
-    canvas.height = video.videoHeight || 720;
-    canvas.getContext('2d').drawImage(video, 0, 0);
-    currentImageData = canvas.toDataURL('image/jpeg', 0.92);
-    stopCamera();
-    enhanced = false;
-    showPreview();
-  }
+function sharpen(ctx, w, h) {
+  const src = ctx.getImageData(0, 0, w, h);
+  const dst = ctx.createImageData(w, h);
+  const s = src.data, d = dst.data;
+  // Sharpening kernel
+  const kernel = [0,-1,0,-1,5,-1,0,-1,0];
 
-  function retake() { hidePreview(); startCamera(); }
-
-  function cancelPreview() {
-    currentImageData = null;
-    hidePreview();
-  }
-
-  function saveDocument() {
-    if (!currentImageData) return;
-
-    const number = document.getElementById('doc-number').value || `DOC-${Date.now()}`;
-    const driver = document.getElementById('doc-driver').value || 'Nav norādīts';
-    const dest   = document.getElementById('doc-dest').value   || 'Nav norādīts';
-
-    const doc = {
-      id: Date.now(),
-      type: selectedType,
-      number,
-      driver,
-      dest,
-      image: currentImageData,
-      time: new Date().toLocaleTimeString('lv-LV', {hour:'2-digit', minute:'2-digit'})
-    };
-
-    documents.push(doc);
-    renderList();
-    updateStats();
-
-    // Reset form
-    document.getElementById('doc-number').value = '';
-    document.getElementById('doc-driver').value = '';
-    document.getElementById('doc-dest').value = '';
-    currentImageData = null;
-    enhanced = false;
-
-    hidePreview();
-    showToast('✅ Dokuments saglabāts!');
-  }
-
-  function renderList() {
-    const list = document.getElementById('scanned-list');
-    const section = document.getElementById('scanned-section');
-
-    if (documents.length === 0) {
-      section.style.display = 'none';
-      return;
-    }
-
-    section.style.display = 'flex';
-    list.innerHTML = documents.map(doc => `
-      <div class="scanned-item" id="item-${doc.id}">
-        <img class="scanned-thumb" src="${doc.image}" alt="doc">
-        <div class="scanned-info">
-          <div class="scanned-name">${doc.type} — ${doc.number}</div>
-          <div class="scanned-meta">${doc.driver} · ${doc.dest} · ${doc.time}</div>
-        </div>
-        <div class="scanned-actions">
-          <button class="icon-btn" onclick="viewDoc(${doc.id})" title="Skatīt">👁</button>
-          <button class="icon-btn del" onclick="deleteDoc(${doc.id})" title="Dzēst">🗑</button>
-        </div>
-      </div>
-    `).join('');
-  }
-
-  function deleteDoc(id) {
-    documents = documents.filter(d => d.id !== id);
-    renderList();
-    updateStats();
-    showToast('🗑 Dzēsts', true);
-  }
-
-  function viewDoc(id) {
-    const doc = documents.find(d => d.id === id);
-    if (!doc) return;
-    const win = window.open();
-    win.document.write(`<html><body style="margin:0;background:#000"><img src="${doc.image}" style="width:100%;max-width:600px;display:block;margin:auto"></body></html>`);
-  }
-
-  function updateStats() {
-    document.getElementById('scan-count').textContent = documents.length;
-    document.getElementById('pdf-count').textContent = documents.length > 0 ? '1' : '0';
-  }
-
-  async function exportPDF() {
-    if (documents.length === 0) { showToast('Nav dokumentu!', true); return; }
-    showProcessing('VEIDO PDF...');
-
-    try {
-      const { PDFDocument, rgb } = PDFLib;
-      const pdfDoc = await PDFDocument.create();
-
-      for (const doc of documents) {
-        const page = pdfDoc.addPage([595, 842]); // A4
-
-        // Header bar
-        page.drawRectangle({ x: 0, y: 792, width: 595, height: 50, color: rgb(0.976, 0.451, 0.086) });
-
-        page.drawText('FreightScan', { x: 20, y: 808, size: 18, color: rgb(1,1,1) });
-        page.drawText(`${doc.type} · ${doc.number}`, { x: 20, y: 770, size: 13, color: rgb(0.2,0.2,0.2) });
-        page.drawText(`Šoferis: ${doc.driver}`, { x: 20, y: 750, size: 11, color: rgb(0.4,0.4,0.4) });
-        page.drawText(`Maršruts: ${doc.dest}`, { x: 20, y: 734, size: 11, color: rgb(0.4,0.4,0.4) });
-        page.drawText(`Laiks: ${doc.time}`, { x: 20, y: 718, size: 10, color: rgb(0.6,0.6,0.6) });
-
-        // Embed image
-        const base64 = doc.image.split(',')[1];
-        const imgBytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
-
-        let embeddedImg;
-        try {
-          embeddedImg = await pdfDoc.embedJpg(imgBytes);
-        } catch {
-          embeddedImg = await pdfDoc.embedPng(imgBytes);
+  for (let y = 1; y < h-1; y++) {
+    for (let x = 1; x < w-1; x++) {
+      let r = 0;
+      for (let ky = -1; ky <= 1; ky++) {
+        for (let kx = -1; kx <= 1; kx++) {
+          const idx = ((y+ky)*w + (x+kx)) * 4;
+          r += s[idx] * kernel[(ky+1)*3 + (kx+1)];
         }
-
-        const { width, height } = embeddedImg.scale(1);
-        const maxW = 555, maxH = 680;
-        const scale = Math.min(maxW / width, maxH / height);
-
-        page.drawImage(embeddedImg, {
-          x: 20,
-          y: 30,
-          width: width * scale,
-          height: height * scale,
-        });
       }
-
-      const bytes = await pdfDoc.save();
-      const blob = new Blob([bytes], { type: 'application/pdf' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `FreightScan_${new Date().toISOString().slice(0,10)}.pdf`;
-      a.click();
-
-      hideProcessing();
-      showToast('📄 PDF lejuplādēts!');
-    } catch (err) {
-      hideProcessing();
-      showToast('Kļūda: ' + err.message, true);
+      const i = (y*w+x)*4;
+      d[i] = d[i+1] = d[i+2] = clamp(r);
+      d[i+3] = 255;
     }
   }
+  ctx.putImageData(dst, 0, 0);
+}
 
-  function showProcessing(text) {
-    document.getElementById('processing-text').textContent = text;
-    document.getElementById('processing').classList.add('show');
+function clamp(v) { return Math.max(0, Math.min(255, Math.round(v))); }
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+async function setStep(id, label) {
+  document.getElementById(id).classList.add('active');
+  document.getElementById('proc-label').textContent = label;
+}
+
+function doneStep(id) {
+  const el = document.getElementById(id);
+  el.classList.remove('active');
+  el.classList.add('done');
+}
+
+// ── SAVE ──
+function saveAndBack() {
+  if (!currentProcessed) return;
+  documents.push({
+    id: Date.now(),
+    image: currentProcessed,
+    time: new Date().toLocaleTimeString('lv-LV', {hour:'2-digit', minute:'2-digit'})
+  });
+  currentProcessed = null;
+  updateBadge();
+  document.getElementById('processing').classList.remove('show');
+  toast('✅ Saglabāts!');
+}
+
+function retake() {
+  currentProcessed = null;
+  document.getElementById('processing').classList.remove('show');
+}
+
+function updateBadge() {
+  const badge = document.getElementById('doc-count-badge');
+  badge.textContent = `${documents.length} dok.`;
+  badge.style.display = documents.length > 0 ? 'block' : 'none';
+}
+
+// ── DOCS VIEW ──
+function openDocs() {
+  renderDocs();
+  document.getElementById('docs-view').classList.add('show');
+}
+
+function closeDocs() {
+  document.getElementById('docs-view').classList.remove('show');
+}
+
+function renderDocs() {
+  const list = document.getElementById('docs-list');
+  if (documents.length === 0) {
+    list.innerHTML = '<div style="text-align:center;padding:40px;color:rgba(255,255,255,0.3);font-size:14px">Nav dokumentu.<br>Fotografē ar pogu apakšā.</div>';
+    return;
+  }
+  list.innerHTML = documents.map((doc, i) => `
+    <div class="doc-item">
+      <img class="doc-thumb" src="${doc.image}">
+      <div class="doc-info">
+        <div class="doc-title">Dokuments ${i+1}</div>
+        <div class="doc-time">${doc.time}</div>
+      </div>
+      <button class="doc-del" onclick="deleteDoc(${doc.id})">🗑</button>
+    </div>
+  `).join('');
+  document.getElementById('export-btn').disabled = documents.length === 0;
+}
+
+function deleteDoc(id) {
+  documents = documents.filter(d => d.id !== id);
+  updateBadge();
+  renderDocs();
+}
+
+// ── EXPORT PDF ──
+async function exportPDF() {
+  if (!documents.length) return;
+  const btn = document.getElementById('export-btn');
+  btn.textContent = 'Veido PDF...';
+  btn.disabled = true;
+
+  try {
+    const { PDFDocument, rgb } = PDFLib;
+    const pdf = await PDFDocument.create();
+
+    for (const doc of documents) {
+      const page = pdf.addPage([595, 842]);
+      const base64 = doc.image.split(',')[1];
+      const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+      let img;
+      try { img = await pdf.embedJpg(bytes); } catch { img = await pdf.embedPng(bytes); }
+      const { width, height } = img.scale(1);
+      const scale = Math.min(555/width, 800/height);
+      page.drawImage(img, { x:20, y:22, width:width*scale, height:height*scale });
+      page.drawText(`FreightScan · ${doc.time}`, { x:20, y:8, size:8, color:rgb(0.6,0.6,0.6) });
+    }
+
+    const bytes = await pdf.save();
+    const blob = new Blob([bytes], {type:'application/pdf'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `FreightScan_${new Date().toISOString().slice(0,10)}.pdf`;
+    a.click();
+    toast('📄 PDF lejuplādēts!');
+  } catch(e) {
+    toast('Kļūda: ' + e.message);
   }
 
-  function hideProcessing() {
-    document.getElementById('processing').classList.remove('show');
-  }
+  btn.textContent = '⬇ Eksportēt PDF';
+  btn.disabled = false;
+}
 
-  function showToast(msg, isError = false) {
-    const t = document.getElementById('toast');
-    t.textContent = msg;
-    t.className = 'toast' + (isError ? ' error' : '');
-    t.classList.add('show');
-    setTimeout(() => t.classList.remove('show'), 2500);
-  }
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// START
+startCamera();
 </script>
 </body>
 </html>
