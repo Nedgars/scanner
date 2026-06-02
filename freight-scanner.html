@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+<html lang="lv">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0a0f1e">
+<title>FreightScan — Kravu dokumenti</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Barlow:wght@300;400;600;700;900&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<style>
+  :root {
+    --bg: #0a0f1e;
+    --surface: #111827;
+    --surface2: #1a2235;
+    --accent: #f97316;
+    --accent2: #fb923c;
+    --text: #f1f5f9;
+    --muted: #64748b;
+    --success: #22c55e;
+    --danger: #ef4444;
+    --border: rgba(249,115,22,0.2);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Barlow', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* GRID BACKGROUND */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(249,115,22,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(249,115,22,0.04) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .app { position: relative; z-index: 1; max-width: 480px; margin: 0 auto; min-height: 100vh; display: flex; flex-direction: column; }
+
+  /* HEADER */
+  header {
+    padding: 20px 20px 16px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(10,15,30,0.8);
+    backdrop-filter: blur(12px);
+    position: sticky; top: 0; z-index: 100;
+  }
+
+  .header-row { display: flex; align-items: center; justify-content: space-between; }
+
+  .logo {
+    font-family: 'Space Mono', monospace;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: -0.5px;
+  }
+
+  .logo span { color: var(--text); }
+
+  .badge {
+    background: var(--accent);
+    color: white;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 2px;
+    font-family: 'Space Mono', monospace;
+    letter-spacing: 1px;
+  }
+
+  /* SCAN COUNT */
+  .stats-bar {
+    display: flex;
+    gap: 16px;
+    margin-top: 12px;
+  }
+
+  .stat {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  .stat strong { color: var(--accent); font-size: 14px; }
+
+  /* MAIN CONTENT */
+  main { flex: 1; padding: 20px; display: flex; flex-direction: column; gap: 20px; }
+
+  /* SCAN BUTTON — hero */
+  .scan-hero {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 32px 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    position: relative;
+    overflow: hidden;
+    cursor: pointer;
+    transition: border-color 0.2s, transform 0.1s;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .scan-hero:active { transform: scale(0.98); }
+  .scan-hero:hover { border-color: var(--accent); }
+
+  .scan-hero::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle at center, rgba(249,115,22,0.06) 0%, transparent 60%);
+    pointer-events: none;
+  }
+
+  .scan-icon {
+    width: 80px;
+    height: 80px;
+    border: 2px solid var(--accent);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+
+  .scan-icon::before, .scan-icon::after {
+    content: '';
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    border-color: var(--accent2);
+    border-style: solid;
+  }
+
+  .scan-icon::before { top: -4px; left: -4px; border-width: 3px 0 0 3px; }
+  .scan-icon::after { bottom: -4px; right: -4px; border-width: 0 3px 3px 0; }
+
+  .scan-icon svg { width: 36px; height: 36px; stroke: var(--accent); fill: none; stroke-width: 1.5; }
+
+  .scan-hero h2 { font-size: 22px; font-weight: 700; color: var(--text); }
+  .scan-hero p { font-size: 14px; color: var(--muted); text-align: center; line-height: 1.5; }
+
+  .scan-btn {
+    background: var(--accent);
+    color: white;
+    border: none;
+    padding: 14px 32px;
+    border-radius: 4px;
+    font-family: 'Barlow', sans-serif;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    width: 100%;
+    transition: background 0.2s;
+  }
+
+  .scan-btn:hover { background: var(--accent2); }
+
+  /* DOC TYPES */
+  .section-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .doc-types {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .doc-type {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .doc-type:hover, .doc-type.active {
+    border-color: var(--accent);
+    background: rgba(249,115,22,0.08);
+  }
+
+  .doc-type .icon { font-size: 20px; }
+  .doc-type .info { flex: 1; }
+  .doc-type .name { font-size: 13px; font-weight: 600; color: var(--text); }
+  .doc-type .desc { font-size: 11px; color: var(--muted); }
+
+  /* PREVIEW & CONTROLS */
+  #preview-section { display: none; flex-direction: column; gap: 16px; }
+
+  .preview-wrap {
+    position: relative;
+    background: #000;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+
+  #preview-canvas {
+    width: 100%;
+    display: block;
+    border-radius: 8px;
+  }
+
+  .preview-overlay {
+    position: absolute;
+    inset: 0;
+    border-radius: 8px;
+    pointer-events: none;
+    box-shadow: inset 0 0 0 2px var(--accent);
+  }
+
+  /* SCAN LINE ANIMATION */
+  .scan-line {
+    position: absolute;
+    left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    animation: scanline 2s linear infinite;
+    pointer-events: none;
+  }
+
+  @keyframes scanline {
+    0% { top: 0; opacity: 1; }
+    90% { opacity: 1; }
+    100% { top: 100%; opacity: 0; }
+  }
+
+  .controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .btn {
+    padding: 12px;
+    border-radius: 4px;
+    border: none;
+    font-family: 'Barlow', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+
+  .btn-primary { background: var(--accent); color: white; }
+  .btn-primary:hover { background: var(--accent2); }
+  .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+  .btn-secondary:hover { border-color: var(--accent); }
+  .btn-success { background: var(--success); color: white; grid-column: 1/-1; }
+  .btn-danger { background: transparent; color: var(--danger); border: 1px solid var(--danger); grid-column: 1/-1; font-size: 13px; padding: 8px; }
+
+  /* DOC INFO FORM */
+  .doc-form {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field label { font-size: 11px; color: var(--muted); font-family: 'Space Mono', monospace; letter-spacing: 1px; }
+
+  .field input, .field select {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 10px 12px;
+    border-radius: 4px;
+    font-family: 'Barlow', sans-serif;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .field input:focus, .field select:focus { border-color: var(--accent); }
+  .field select option { background: var(--surface); }
+
+  /* SCANNED LIST */
+  #scanned-section { display: none; flex-direction: column; gap: 12px; }
+
+  .scanned-list { display: flex; flex-direction: column; gap: 8px; }
+
+  .scanned-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    animation: slideIn 0.3s ease;
+  }
+
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .scanned-thumb {
+    width: 48px;
+    height: 48px;
+    border-radius: 4px;
+    object-fit: cover;
+    border: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .scanned-info { flex: 1; min-width: 0; }
+  .scanned-name { font-size: 14px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .scanned-meta { font-size: 11px; color: var(--muted); font-family: 'Space Mono', monospace; margin-top: 2px; }
+
+  .scanned-actions { display: flex; gap: 6px; }
+
+  .icon-btn {
+    width: 32px; height: 32px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text);
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+    transition: all 0.2s;
+  }
+
+  .icon-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .icon-btn.del:hover { border-color: var(--danger); color: var(--danger); }
+
+  /* EXPORT BAR */
+  .export-bar {
+    background: var(--surface);
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .export-bar h3 { font-size: 14px; font-weight: 700; color: var(--accent); }
+  .export-bar p { font-size: 12px; color: var(--muted); }
+
+  /* TOAST */
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    background: var(--success);
+    color: white;
+    padding: 12px 24px;
+    border-radius: 4px;
+    font-weight: 600;
+    font-size: 14px;
+    transition: transform 0.3s cubic-bezier(.34,1.56,.64,1);
+    z-index: 999;
+    white-space: nowrap;
+  }
+
+  .toast.show { transform: translateX(-50%) translateY(0); }
+  .toast.error { background: var(--danger); }
+
+  /* HIDDEN INPUT */
+  #file-input { display: none; }
+
+  /* PROCESSING OVERLAY */
+  .processing {
+    position: fixed;
+    inset: 0;
+    background: rgba(10,15,30,0.9);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 16px;
+    z-index: 200;
+    backdrop-filter: blur(4px);
+  }
+
+  .processing.show { display: flex; }
+
+  .spinner {
+    width: 48px; height: 48px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .processing p { color: var(--muted); font-family: 'Space Mono', monospace; font-size: 12px; letter-spacing: 1px; }
+
+  /* EMPTY STATE */
+  .empty {
+    text-align: center;
+    padding: 32px 20px;
+    color: var(--muted);
+    font-size: 14px;
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+  }
+  .empty .e-icon { font-size: 32px; margin-bottom: 8px; }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <header>
+    <div class="header-row">
+      <div class="logo">Freight<span>Scan</span></div>
+      <div class="badge">BETA</div>
+    </div>
+    <div class="stats-bar">
+      <div class="stat">Skenēti: <strong id="scan-count">0</strong></div>
+      <div class="stat">PDF gatavi: <strong id="pdf-count">0</strong></div>
+    </div>
+  </header>
+
+  <main>
+    <!-- DOC TYPE SELECTOR -->
+    <div>
+      <div class="section-label">Dokumenta veids</div>
+      <div class="doc-types">
+        <div class="doc-type active" data-type="CMR" onclick="selectType(this)">
+          <div class="icon">🚛</div>
+          <div class="info">
+            <div class="name">CMR</div>
+            <div class="desc">Kravu pavadzīme</div>
+          </div>
+        </div>
+        <div class="doc-type" data-type="Rēķins" onclick="selectType(this)">
+          <div class="icon">🧾</div>
+          <div class="info">
+            <div class="name">Rēķins</div>
+            <div class="desc">Invoice</div>
+          </div>
+        </div>
+        <div class="doc-type" data-type="Muita" onclick="selectType(this)">
+          <div class="icon">📋</div>
+          <div class="info">
+            <div class="name">Muita</div>
+            <div class="desc">Customs doc</div>
+          </div>
+        </div>
+        <div class="doc-type" data-type="Cits" onclick="selectType(this)">
+          <div class="icon">📄</div>
+          <div class="info">
+            <div class="name">Cits</div>
+            <div class="desc">Brīva forma</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCAN HERO -->
+    <div class="scan-hero" id="scan-hero">
+      <div class="scan-icon">
+        <svg viewBox="0 0 24 24"><path d="M3 9V6a1 1 0 011-1h3M15 5h3a1 1 0 011 1v3M21 15v3a1 1 0 01-1 1h-3M9 21H6a1 1 0 01-1-1v-3"/><path d="M7 12h10M12 7v10"/></svg>
+      </div>
+      <h2>Skenēt dokumentu</h2>
+      <p>Uzfotografē CMR, rēķinu vai jebkuru loģistikas dokumentu</p>
+      <button class="scan-btn" onclick="startCamera()">📷 Atvērt kameru</button>
+      <button class="scan-btn" style="background:var(--surface2);border:1px solid var(--border);margin-top:4px" onclick="document.getElementById('file-input').click()">🖼 Izvēlēties no galerijas</button>
+    </div>
+
+    <!-- LIVE CAMERA VIEW -->
+    <div id="camera-section" style="display:none;flex-direction:column;gap:12px">
+      <div class="section-label">Kamera — novietojiet dokumentu kadrā</div>
+      <div class="preview-wrap" style="position:relative">
+        <video id="camera-video" autoplay playsinline muted style="width:100%;display:block;border-radius:8px;background:#000"></video>
+        <div class="preview-overlay"></div>
+        <!-- Corner guides -->
+        <div style="position:absolute;top:12px;left:12px;width:24px;height:24px;border-top:3px solid var(--accent);border-left:3px solid var(--accent);border-radius:2px 0 0 0"></div>
+        <div style="position:absolute;top:12px;right:12px;width:24px;height:24px;border-top:3px solid var(--accent);border-right:3px solid var(--accent);border-radius:0 2px 0 0"></div>
+        <div style="position:absolute;bottom:12px;left:12px;width:24px;height:24px;border-bottom:3px solid var(--accent);border-left:3px solid var(--accent);border-radius:0 0 0 2px"></div>
+        <div style="position:absolute;bottom:12px;right:12px;width:24px;height:24px;border-bottom:3px solid var(--accent);border-right:3px solid var(--accent);border-radius:0 0 2px 0"></div>
+      </div>
+      <div class="controls">
+        <button class="btn btn-secondary" onclick="stopCamera()">✕ Aizvērt</button>
+        <button class="btn btn-primary" onclick="captureFromVideo()">📸 Fotografēt</button>
+      </div>
+    </div>
+
+    <input type="file" id="file-input" accept="image/*" onchange="handleCapture(event)">
+
+    <!-- PREVIEW SECTION -->
+    <div id="preview-section">
+      <div class="section-label">Priekšskatījums</div>
+      <div class="preview-wrap">
+        <canvas id="preview-canvas"></canvas>
+        <div class="preview-overlay"></div>
+        <div class="scan-line"></div>
+      </div>
+
+      <!-- METADATA FORM -->
+      <div class="doc-form">
+        <div class="field">
+          <label>NUMURS / ATSAUCE</label>
+          <input type="text" id="doc-number" placeholder="piem. CMR-2025-0042">
+        </div>
+        <div class="field">
+          <label>ŠOFERIS</label>
+          <input type="text" id="doc-driver" placeholder="Vārds Uzvārds">
+        </div>
+        <div class="field">
+          <label>GALAMĒRĶIS</label>
+          <input type="text" id="doc-dest" placeholder="piem. Rīga → Berlīne">
+        </div>
+      </div>
+
+      <div class="controls">
+        <button class="btn btn-secondary" onclick="retake()">↩ Pārfotografēt</button>
+        <button class="btn btn-primary" onclick="enhanceImage()">✨ Uzlabot</button>
+        <button class="btn btn-success" onclick="saveDocument()">💾 Saglabāt dokumentu</button>
+        <button class="btn btn-danger" onclick="cancelPreview()">Atcelt</button>
+      </div>
+    </div>
+
+    <!-- SCANNED DOCUMENTS LIST -->
+    <div id="scanned-section">
+      <div class="section-label">Skenētie dokumenti</div>
+      <div class="scanned-list" id="scanned-list"></div>
+
+      <div class="export-bar">
+        <h3>📦 Eksportēt PDF paketi</h3>
+        <p>Apvieno visus dokumentus vienā PDF failā nosūtīšanai</p>
+        <button class="btn btn-primary" onclick="exportPDF()" id="export-btn">⬇ Lejuplādēt PDF</button>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- PROCESSING OVERLAY -->
+<div class="processing" id="processing">
+  <div class="spinner"></div>
+  <p id="processing-text">APSTRĀDĀ...</p>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+  let selectedType = 'CMR';
+  let currentImageData = null;
+  let documents = [];
+  let enhanced = false;
+  let cameraStream = null;
+
+  function selectType(el) {
+    document.querySelectorAll('.doc-type').forEach(d => d.classList.remove('active'));
+    el.classList.add('active');
+    selectedType = el.dataset.type;
+  }
+
+  function handleCapture(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    showProcessing('NOLASA ATTĒLU...');
+    enhanced = false;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        drawToCanvas(img);
+        hideProcessing();
+        showPreview();
+      };
+      img.src = e.target.result;
+      currentImageData = e.target.result;
+    };
+    reader.readAsDataURL(file);
+    event.target.value = '';
+  }
+
+  function drawToCanvas(img) {
+    const canvas = document.getElementById('preview-canvas');
+    const maxW = canvas.parentElement.offsetWidth;
+    const ratio = img.height / img.width;
+    canvas.width = maxW;
+    canvas.height = maxW * ratio;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  }
+
+  function enhanceImage() {
+    if (enhanced) { showToast('Jau uzlabots!'); return; }
+    showProcessing('UZLABO KVALITĀTI...');
+
+    setTimeout(() => {
+      const canvas = document.getElementById('preview-canvas');
+      const ctx = canvas.getContext('2d');
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const data = imageData.data;
+
+      // Auto-contrast + sharpen simulation
+      // Step 1: increase contrast
+      const contrast = 40;
+      const factor = (259 * (contrast + 255)) / (255 * (259 - contrast));
+
+      for (let i = 0; i < data.length; i += 4) {
+        data[i]   = clamp(factor * (data[i]   - 128) + 128);
+        data[i+1] = clamp(factor * (data[i+1] - 128) + 128);
+        data[i+2] = clamp(factor * (data[i+2] - 128) + 128);
+      }
+
+      // Step 2: slight brightness boost
+      for (let i = 0; i < data.length; i += 4) {
+        data[i]   = clamp(data[i]   + 15);
+        data[i+1] = clamp(data[i+1] + 15);
+        data[i+2] = clamp(data[i+2] + 15);
+      }
+
+      ctx.putImageData(imageData, 0, 0);
+      currentImageData = canvas.toDataURL('image/jpeg', 0.92);
+      enhanced = true;
+      hideProcessing();
+      showToast('✨ Attēls uzlabots!');
+    }, 600);
+  }
+
+  function clamp(val) { return Math.max(0, Math.min(255, Math.round(val))); }
+
+  function showPreview() {
+    document.getElementById('scan-hero').style.display = 'none';
+    document.getElementById('preview-section').style.display = 'flex';
+  }
+
+  function hidePreview() {
+    document.getElementById('scan-hero').style.display = 'flex';
+    document.getElementById('preview-section').style.display = 'none';
+  }
+
+  async function startCamera() {
+    try {
+      cameraStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }
+      });
+      const video = document.getElementById('camera-video');
+      video.srcObject = cameraStream;
+      document.getElementById('scan-hero').style.display = 'none';
+      document.getElementById('camera-section').style.display = 'flex';
+    } catch (err) {
+      showToast('Kamera nav pieejama — izmanto galeriju', true);
+    }
+  }
+
+  function stopCamera() {
+    if (cameraStream) { cameraStream.getTracks().forEach(t => t.stop()); cameraStream = null; }
+    document.getElementById('camera-section').style.display = 'none';
+    document.getElementById('scan-hero').style.display = 'flex';
+  }
+
+  function captureFromVideo() {
+    const video = document.getElementById('camera-video');
+    const canvas = document.getElementById('preview-canvas');
+    canvas.width = video.videoWidth || 1280;
+    canvas.height = video.videoHeight || 720;
+    canvas.getContext('2d').drawImage(video, 0, 0);
+    currentImageData = canvas.toDataURL('image/jpeg', 0.92);
+    stopCamera();
+    enhanced = false;
+    showPreview();
+  }
+
+  function retake() { hidePreview(); startCamera(); }
+
+  function cancelPreview() {
+    currentImageData = null;
+    hidePreview();
+  }
+
+  function saveDocument() {
+    if (!currentImageData) return;
+
+    const number = document.getElementById('doc-number').value || `DOC-${Date.now()}`;
+    const driver = document.getElementById('doc-driver').value || 'Nav norādīts';
+    const dest   = document.getElementById('doc-dest').value   || 'Nav norādīts';
+
+    const doc = {
+      id: Date.now(),
+      type: selectedType,
+      number,
+      driver,
+      dest,
+      image: currentImageData,
+      time: new Date().toLocaleTimeString('lv-LV', {hour:'2-digit', minute:'2-digit'})
+    };
+
+    documents.push(doc);
+    renderList();
+    updateStats();
+
+    // Reset form
+    document.getElementById('doc-number').value = '';
+    document.getElementById('doc-driver').value = '';
+    document.getElementById('doc-dest').value = '';
+    currentImageData = null;
+    enhanced = false;
+
+    hidePreview();
+    showToast('✅ Dokuments saglabāts!');
+  }
+
+  function renderList() {
+    const list = document.getElementById('scanned-list');
+    const section = document.getElementById('scanned-section');
+
+    if (documents.length === 0) {
+      section.style.display = 'none';
+      return;
+    }
+
+    section.style.display = 'flex';
+    list.innerHTML = documents.map(doc => `
+      <div class="scanned-item" id="item-${doc.id}">
+        <img class="scanned-thumb" src="${doc.image}" alt="doc">
+        <div class="scanned-info">
+          <div class="scanned-name">${doc.type} — ${doc.number}</div>
+          <div class="scanned-meta">${doc.driver} · ${doc.dest} · ${doc.time}</div>
+        </div>
+        <div class="scanned-actions">
+          <button class="icon-btn" onclick="viewDoc(${doc.id})" title="Skatīt">👁</button>
+          <button class="icon-btn del" onclick="deleteDoc(${doc.id})" title="Dzēst">🗑</button>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function deleteDoc(id) {
+    documents = documents.filter(d => d.id !== id);
+    renderList();
+    updateStats();
+    showToast('🗑 Dzēsts', true);
+  }
+
+  function viewDoc(id) {
+    const doc = documents.find(d => d.id === id);
+    if (!doc) return;
+    const win = window.open();
+    win.document.write(`<html><body style="margin:0;background:#000"><img src="${doc.image}" style="width:100%;max-width:600px;display:block;margin:auto"></body></html>`);
+  }
+
+  function updateStats() {
+    document.getElementById('scan-count').textContent = documents.length;
+    document.getElementById('pdf-count').textContent = documents.length > 0 ? '1' : '0';
+  }
+
+  async function exportPDF() {
+    if (documents.length === 0) { showToast('Nav dokumentu!', true); return; }
+    showProcessing('VEIDO PDF...');
+
+    try {
+      const { PDFDocument, rgb } = PDFLib;
+      const pdfDoc = await PDFDocument.create();
+
+      for (const doc of documents) {
+        const page = pdfDoc.addPage([595, 842]); // A4
+
+        // Header bar
+        page.drawRectangle({ x: 0, y: 792, width: 595, height: 50, color: rgb(0.976, 0.451, 0.086) });
+
+        page.drawText('FreightScan', { x: 20, y: 808, size: 18, color: rgb(1,1,1) });
+        page.drawText(`${doc.type} · ${doc.number}`, { x: 20, y: 770, size: 13, color: rgb(0.2,0.2,0.2) });
+        page.drawText(`Šoferis: ${doc.driver}`, { x: 20, y: 750, size: 11, color: rgb(0.4,0.4,0.4) });
+        page.drawText(`Maršruts: ${doc.dest}`, { x: 20, y: 734, size: 11, color: rgb(0.4,0.4,0.4) });
+        page.drawText(`Laiks: ${doc.time}`, { x: 20, y: 718, size: 10, color: rgb(0.6,0.6,0.6) });
+
+        // Embed image
+        const base64 = doc.image.split(',')[1];
+        const imgBytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+
+        let embeddedImg;
+        try {
+          embeddedImg = await pdfDoc.embedJpg(imgBytes);
+        } catch {
+          embeddedImg = await pdfDoc.embedPng(imgBytes);
+        }
+
+        const { width, height } = embeddedImg.scale(1);
+        const maxW = 555, maxH = 680;
+        const scale = Math.min(maxW / width, maxH / height);
+
+        page.drawImage(embeddedImg, {
+          x: 20,
+          y: 30,
+          width: width * scale,
+          height: height * scale,
+        });
+      }
+
+      const bytes = await pdfDoc.save();
+      const blob = new Blob([bytes], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `FreightScan_${new Date().toISOString().slice(0,10)}.pdf`;
+      a.click();
+
+      hideProcessing();
+      showToast('📄 PDF lejuplādēts!');
+    } catch (err) {
+      hideProcessing();
+      showToast('Kļūda: ' + err.message, true);
+    }
+  }
+
+  function showProcessing(text) {
+    document.getElementById('processing-text').textContent = text;
+    document.getElementById('processing').classList.add('show');
+  }
+
+  function hideProcessing() {
+    document.getElementById('processing').classList.remove('show');
+  }
+
+  function showToast(msg, isError = false) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast' + (isError ? ' error' : '');
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2500);
+  }
+</script>
+</body>
+</html>
